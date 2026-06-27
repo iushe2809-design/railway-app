@@ -10,7 +10,9 @@ from emergentintegrations.llm.chat import ImageContent, LlmChat, UserMessage
 
 logger = logging.getLogger(__name__)
 
-EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
+
+def _emergent_key() -> str:
+    return os.environ.get("EMERGENT_LLM_KEY", "")
 
 SYSTEM_PROMPT = """You are an expert railway station cleanliness inspector for Indian Railways.
 Analyze the provided photograph of a railway station area and produce a structured JSON report.
@@ -56,14 +58,14 @@ def _extract_json(text: str) -> dict:
 
 async def analyze_image(image_bytes: bytes, content_type: str = "image/jpeg") -> dict:
     """Run Claude vision analysis on a single image. Returns the parsed JSON."""
-    if not EMERGENT_LLM_KEY:
+    if not _emergent_key():
         raise RuntimeError("EMERGENT_LLM_KEY not configured")
 
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     image = ImageContent(image_base64=b64)
 
     chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
+        api_key=_emergent_key(),
         session_id=f"inspect-{uuid.uuid4()}",
         system_message=SYSTEM_PROMPT,
     ).with_model("anthropic", "claude-sonnet-4-5-20250929")
