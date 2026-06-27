@@ -37,8 +37,8 @@ function toCsv(rows) {
 }
 
 export default function Reports() {
-  const [stations, setStations] = useState([]);
-  const [stationId, setStationId] = useState("all");
+  const [stationNames, setStationNames] = useState([]);
+  const [stationName, setStationName] = useState("all");
   const [from, setFrom] = useState(() => {
     const d = new Date(Date.now() - 30 * 86400000);
     return d.toISOString().slice(0, 10);
@@ -47,12 +47,12 @@ export default function Reports() {
   const [data, setData] = useState(null);
 
   useEffect(() => {
-    api.get("/stations").then((r) => setStations(r.data));
+    api.get("/inspections/station-names").then((r) => setStationNames(r.data));
   }, []);
 
   const load = async () => {
     const params = new URLSearchParams();
-    if (stationId !== "all") params.set("station_id", stationId);
+    if (stationName !== "all") params.set("station_name", stationName);
     if (from) params.set("date_from", from);
     if (to) params.set("date_to", to);
     const res = await api.get(`/reports/summary?${params.toString()}`);
@@ -62,7 +62,7 @@ export default function Reports() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stationId, from, to]);
+  }, [stationName, from, to]);
 
   const exportCsv = () => {
     if (!data || data.station_breakdown.length === 0) return;
@@ -104,15 +104,18 @@ export default function Reports() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <Label className="text-xs text-slate-400">Station</Label>
-            <Select value={stationId} onValueChange={setStationId}>
+            <Select value={stationName} onValueChange={setStationName}>
               <SelectTrigger className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1" data-testid="reports-station-select">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#0B1120] border-slate-800 text-slate-100">
+              <SelectContent className="bg-[#0B1120] border-slate-800 text-slate-100 max-h-72">
                 <SelectItem value="all">All stations</SelectItem>
-                {stations.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
+                {stationNames.length === 0 && (
+                  <div className="px-2 py-1.5 text-xs text-slate-500">No stations submitted yet</div>
+                )}
+                {stationNames.map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {n}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -205,7 +208,7 @@ export default function Reports() {
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {data.station_breakdown.map((s) => (
-                    <tr key={s.station_id} className="hover:bg-slate-800/40">
+                    <tr key={s.station_name} className="hover:bg-slate-800/40">
                       <td className="px-5 py-3 text-slate-100">{s.station_name}</td>
                       <td className="px-5 py-3 text-right font-mono">{s.total}</td>
                       <td className="px-5 py-3 text-right font-mono text-emerald-400">{s.clean}</td>
@@ -235,7 +238,7 @@ export default function Reports() {
                     <div className="flex items-center justify-between gap-3 mb-1">
                       <div className="text-sm font-medium text-slate-100">{u.station_name}</div>
                       <div className="text-xs text-slate-500">
-                        {new Date(u.created_at).toLocaleString()} · Score {u.score}
+                        {u.inspection_date || new Date(u.created_at).toLocaleDateString()} · Score {u.score}
                       </div>
                     </div>
                     {u.issues.length > 0 && (

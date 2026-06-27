@@ -19,6 +19,9 @@ export default function PublicUpload() {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [inspectionDate, setInspectionDate] = useState(
+    () => new Date().toISOString().slice(0, 10)
+  );
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -62,6 +65,7 @@ export default function PublicUpload() {
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));
     fd.append("uploader_name", name || "Anonymous");
+    fd.append("inspection_date", inspectionDate);
     try {
       await fetch(`${API}/public/upload/${token}`, {
         method: "POST",
@@ -136,6 +140,17 @@ export default function PublicUpload() {
                   placeholder="e.g. Passenger A"
                   className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1"
                   data-testid="public-uploader-name"
+                />
+              </div>
+              <div className="mt-4">
+                <Label className="text-slate-300">Inspection date</Label>
+                <Input
+                  type="date"
+                  value={inspectionDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setInspectionDate(e.target.value)}
+                  className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1"
+                  data-testid="public-inspection-date"
                 />
               </div>
 

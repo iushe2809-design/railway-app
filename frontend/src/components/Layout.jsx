@@ -23,7 +23,6 @@ export default function Layout() {
         { to: "/admin/inspections", label: "Inspections", icon: ClipboardList, id: "nav-inspections" },
         { to: "/admin/reports", label: "Reports", icon: FileBarChart2, id: "nav-reports" },
         { to: "/admin/users", label: "Users", icon: Users, id: "nav-users" },
-        { to: "/admin/stations", label: "Stations", icon: Train, id: "nav-stations" },
         { to: "/admin/share-links", label: "Share Links", icon: Share2, id: "nav-share-links" },
       ]
     : [{ to: "/upload", label: "Upload", icon: Camera, id: "nav-upload" }];
@@ -57,7 +56,7 @@ export default function Layout() {
             <div className="hidden md:flex flex-col items-end leading-tight">
               <div className="text-sm text-slate-200" data-testid="header-user-name">{user?.full_name}</div>
               <div className="text-[11px] uppercase tracking-[0.15em] text-slate-500">
-                {user?.role === "admin" ? "Super Admin" : user?.station_name || "Station Master"}
+                {user?.role === "admin" ? "Super Admin" : "Station Master"}
               </div>
             </div>
             <Button

@@ -63,7 +63,6 @@ export default function AdminDashboard() {
     name: s.station_name,
     score: s.avg_score,
   }));
-
   return (
     <div className="space-y-8" data-testid="admin-dashboard">
       <div className="flex items-end justify-between flex-wrap gap-3">

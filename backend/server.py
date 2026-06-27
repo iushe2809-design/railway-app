@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -96,7 +97,7 @@ class OverrideRequest(BaseModel):
 
 
 class ShareLinkCreate(BaseModel):
-    station_id: str
+    station_name: str
 
 
 # ============ Helpers ============
@@ -294,14 +295,14 @@ async def create_share_link(
     payload: ShareLinkCreate, user: Annotated[dict, Depends(require_user)]
 ):
     require_admin(user)
-    st = await db.stations.find_one({"id": payload.station_id}, {"_id": 0})
-    if not st:
-        raise HTTPException(status_code=404, detail="Station not found")
+    name = (payload.station_name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Station name is required")
     link = {
         "id": str(uuid.uuid4()),
         "token": secrets.token_urlsafe(16),
-        "station_id": st["id"],
-        "station_name": st["name"],
+        "station_id": None,
+        "station_name": name,
         "created_at": now_iso(),
         "created_by": user["id"],
         "active": True,
@@ -341,12 +342,13 @@ ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp"}
 
 
 async def _save_inspection(
-    station_id: str,
+    station_id: Optional[str],
     station_name: str,
     uploaded_by_id: Optional[str],
     uploaded_by_name: str,
     upload_source: str,
     files: List[UploadFile],
+    inspection_date: Optional[str] = None,
 ) -> dict:
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
@@ -362,7 +364,8 @@ async def _save_inspection(
         if len(data) > 10 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="File too large (max 10MB)")
         ext = content_type.split("/")[-1].replace("jpeg", "jpg")
-        path = f"{APP_NAME}/stations/{station_id}/{uuid.uuid4()}.{ext}"
+        slug = re.sub(r"[^a-z0-9]+", "-", station_name.lower())[:40] or "station"
+        path = f"{APP_NAME}/stations/{slug}/{uuid.uuid4()}.{ext}"
         result = put_object(path, data, content_type)
         # Run AI analysis
         try:
@@ -391,16 +394,19 @@ async def _save_inspection(
         )
 
     score, rating = await aggregate_inspection(photos)
+    today_iso_date = datetime.now(timezone.utc).date().isoformat()
+    insp_date = (inspection_date or today_iso_date).strip()
     inspection = {
         "id": str(uuid.uuid4()),
         "station_id": station_id,
-        "station_name": station_name,
+        "station_name": station_name.strip(),
         "uploaded_by_id": uploaded_by_id,
         "uploaded_by_name": uploaded_by_name,
         "upload_source": upload_source,  # "sm" or "public"
         "photos": photos,
         "aggregate_score": score,
         "aggregate_rating": rating,
+        "inspection_date": insp_date,
         "created_at": now_iso(),
         "is_deleted": False,
     }
@@ -412,30 +418,19 @@ async def _save_inspection(
 async def upload_inspection(
     user: Annotated[dict, Depends(require_user)],
     files: List[UploadFile] = File(...),
-    station_id: Optional[str] = Form(None),
+    station_name: str = Form(...),
+    inspection_date: Optional[str] = Form(None),
 ):
-    # Determine station: SM uses assigned; admin may pass station_id
-    if user["role"] == "sm":
-        sid = user.get("station_id")
-        if not sid:
-            raise HTTPException(
-                status_code=400, detail="Your account has no assigned station"
-            )
-        station = await db.stations.find_one({"id": sid}, {"_id": 0})
-    else:
-        if not station_id:
-            raise HTTPException(status_code=400, detail="station_id required")
-        station = await db.stations.find_one({"id": station_id}, {"_id": 0})
-    if not station:
-        raise HTTPException(status_code=404, detail="Station not found")
-
+    if not station_name or not station_name.strip():
+        raise HTTPException(status_code=400, detail="Station name is required")
     return await _save_inspection(
-        station_id=station["id"],
-        station_name=station["name"],
+        station_id=None,
+        station_name=station_name.strip(),
         uploaded_by_id=user["id"],
         uploaded_by_name=user["full_name"],
         upload_source="sm" if user["role"] == "sm" else "admin",
         files=files,
+        inspection_date=inspection_date,
     )
 
 
@@ -444,27 +439,38 @@ async def public_upload(
     token: str,
     files: List[UploadFile] = File(...),
     uploader_name: str = Form("Anonymous"),
+    inspection_date: Optional[str] = Form(None),
 ):
     link = await db.share_links.find_one({"token": token, "active": True}, {"_id": 0})
     if not link:
         raise HTTPException(status_code=404, detail="Invalid or expired link")
     return await _save_inspection(
-        station_id=link["station_id"],
+        station_id=link.get("station_id"),
         station_name=link["station_name"],
         uploaded_by_id=None,
         uploaded_by_name=f"Public: {uploader_name.strip()[:50]}",
         upload_source="public",
         files=files,
+        inspection_date=inspection_date,
     )
 
 
 # ============ Inspection list / detail / override ============
 
 
+@api_router.get("/inspections/station-names")
+async def list_station_names(user: Annotated[dict, Depends(require_user)]):
+    """Distinct station names taken from actual SM submissions (admin filter use)."""
+    require_admin(user)
+    names = await db.inspections.distinct("station_name", {"is_deleted": False})
+    names = sorted([n for n in names if n])
+    return names
+
+
 @api_router.get("/inspections")
 async def list_inspections(
     user: Annotated[dict, Depends(require_user)],
-    station_id: Optional[str] = None,
+    station_name: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     rating: Optional[str] = None,
@@ -474,15 +480,15 @@ async def list_inspections(
     # SM can only see their own
     if user["role"] == "sm":
         query["uploaded_by_id"] = user["id"]
-    if station_id:
-        query["station_id"] = station_id
+    if station_name:
+        query["station_name"] = station_name
     if date_from or date_to:
         rng: dict = {}
         if date_from:
             rng["$gte"] = date_from
         if date_to:
-            rng["$lte"] = date_to + "T23:59:59"
-        query["created_at"] = rng
+            rng["$lte"] = date_to
+        query["inspection_date"] = rng
     if rating:
         query["aggregate_rating"] = rating
     docs = (
@@ -583,7 +589,7 @@ async def reports_summary(
     user: Annotated[dict, Depends(require_user)],
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
-    station_id: Optional[str] = None,
+    station_name: Optional[str] = None,
 ):
     require_admin(user)
     query: dict = {"is_deleted": False}
@@ -592,10 +598,10 @@ async def reports_summary(
         if date_from:
             rng["$gte"] = date_from
         if date_to:
-            rng["$lte"] = date_to + "T23:59:59"
-        query["created_at"] = rng
-    if station_id:
-        query["station_id"] = station_id
+            rng["$lte"] = date_to
+        query["inspection_date"] = rng
+    if station_name:
+        query["station_name"] = station_name
     docs = await db.inspections.find(query, {"_id": 0}).to_list(2000)
 
     total_inspections = len(docs)
@@ -607,11 +613,10 @@ async def reports_summary(
     for d in docs:
         rating = d.get("aggregate_rating", "Unclean")
         counts[rating] = counts.get(rating, 0) + 1
-        sid = d["station_id"]
-        if sid not in by_station:
-            by_station[sid] = {
-                "station_id": sid,
-                "station_name": d["station_name"],
+        sname = d.get("station_name", "Unknown")
+        if sname not in by_station:
+            by_station[sname] = {
+                "station_name": sname,
                 "total": 0,
                 "clean": 0,
                 "needs_attention": 0,
@@ -619,16 +624,16 @@ async def reports_summary(
                 "avg_score": 0,
                 "_scores": [],
             }
-        by_station[sid]["total"] += 1
+        by_station[sname]["total"] += 1
         if rating == "Clean":
-            by_station[sid]["clean"] += 1
+            by_station[sname]["clean"] += 1
         elif rating == "Needs Attention":
-            by_station[sid]["needs_attention"] += 1
+            by_station[sname]["needs_attention"] += 1
         else:
-            by_station[sid]["unclean"] += 1
-        by_station[sid]["_scores"].append(d.get("aggregate_score", 0))
+            by_station[sname]["unclean"] += 1
+        by_station[sname]["_scores"].append(d.get("aggregate_score", 0))
 
-        day = d["created_at"][:10]
+        day = d.get("inspection_date") or d["created_at"][:10]
         by_day[day] = by_day.get(day, 0) + len(d["photos"])
 
         if rating == "Unclean":
@@ -639,9 +644,9 @@ async def reports_summary(
             unclean_details.append(
                 {
                     "inspection_id": d["id"],
-                    "station_id": d["station_id"],
-                    "station_name": d["station_name"],
+                    "station_name": sname,
                     "score": d.get("aggregate_score", 0),
+                    "inspection_date": d.get("inspection_date") or d["created_at"][:10],
                     "created_at": d["created_at"],
                     "issues": issues[:8],
                 }

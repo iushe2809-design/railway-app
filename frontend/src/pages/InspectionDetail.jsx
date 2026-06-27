@@ -64,7 +64,8 @@ export default function InspectionDetail() {
             <div className="text-xs uppercase tracking-[0.22em] text-blue-400 mb-2">Inspection report</div>
             <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">{insp.station_name}</h1>
             <div className="text-slate-400 mt-2 text-sm">
-              {format(new Date(insp.created_at), "PPpp")} · {insp.photos.length} photo
+              {insp.inspection_date ? `Inspection date: ${insp.inspection_date} · ` : ""}
+              Uploaded {format(new Date(insp.created_at), "PPp")} · {insp.photos.length} photo
               {insp.photos.length === 1 ? "" : "s"} · Submitted by{" "}
               <span className="text-slate-200">{insp.uploaded_by_name}</span>
             </div>

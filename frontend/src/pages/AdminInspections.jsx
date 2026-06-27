@@ -16,21 +16,21 @@ import { format } from "date-fns";
 import { Filter, Search, ArrowRight } from "lucide-react";
 
 export default function AdminInspections() {
-  const [stations, setStations] = useState([]);
+  const [stationNames, setStationNames] = useState([]);
   const [items, setItems] = useState([]);
-  const [stationId, setStationId] = useState("all");
+  const [stationName, setStationName] = useState("all");
   const [rating, setRating] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    api.get("/stations").then((r) => setStations(r.data));
+    api.get("/inspections/station-names").then((r) => setStationNames(r.data));
   }, []);
 
   const load = async () => {
     const params = new URLSearchParams();
-    if (stationId !== "all") params.set("station_id", stationId);
+    if (stationName !== "all") params.set("station_name", stationName);
     if (rating !== "all") params.set("rating", rating);
     if (from) params.set("date_from", from);
     if (to) params.set("date_to", to);
@@ -41,7 +41,7 @@ export default function AdminInspections() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stationId, rating, from, to]);
+  }, [stationName, rating, from, to]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return items;
@@ -60,6 +60,9 @@ export default function AdminInspections() {
         <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">
           Inspections
         </h1>
+        <p className="text-slate-400 mt-2 text-sm">
+          Filter by date and station name (as entered by Station Masters).
+        </p>
       </div>
 
       <div className="surface rounded-xl p-4 md:p-5">
@@ -69,15 +72,18 @@ export default function AdminInspections() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <Label className="text-xs text-slate-400">Station</Label>
-            <Select value={stationId} onValueChange={setStationId}>
+            <Select value={stationName} onValueChange={setStationName}>
               <SelectTrigger className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1" data-testid="filter-station">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#0B1120] border-slate-800 text-slate-100">
+              <SelectContent className="bg-[#0B1120] border-slate-800 text-slate-100 max-h-72">
                 <SelectItem value="all">All stations</SelectItem>
-                {stations.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
+                {stationNames.length === 0 && (
+                  <div className="px-2 py-1.5 text-xs text-slate-500">No stations submitted yet</div>
+                )}
+                {stationNames.map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {n}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -131,13 +137,13 @@ export default function AdminInspections() {
             </div>
           </div>
         </div>
-        {(stationId !== "all" || rating !== "all" || from || to || search) && (
+        {(stationName !== "all" || rating !== "all" || from || to || search) && (
           <div className="mt-3">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
-                setStationId("all");
+                setStationName("all");
                 setRating("all");
                 setFrom("");
                 setTo("");
@@ -181,7 +187,7 @@ export default function AdminInspections() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-slate-100 truncate">{insp.station_name}</div>
                   <div className="text-xs text-slate-500 mt-0.5 truncate">
-                    {format(new Date(insp.created_at), "PPp")} · {insp.photos.length} photo
+                    {insp.inspection_date || format(new Date(insp.created_at), "PP")} · {insp.photos.length} photo
                     {insp.photos.length === 1 ? "" : "s"} · by {insp.uploaded_by_name}
                   </div>
                 </div>

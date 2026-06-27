@@ -1,14 +1,8 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -25,19 +19,14 @@ import { format } from "date-fns";
 
 export default function ShareLinks() {
   const [links, setLinks] = useState([]);
-  const [stations, setStations] = useState([]);
   const [open, setOpen] = useState(false);
-  const [stationId, setStationId] = useState("");
+  const [stationName, setStationName] = useState("");
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(null);
 
   const load = async () => {
-    const [l, s] = await Promise.all([
-      api.get("/admin/share-links"),
-      api.get("/stations"),
-    ]);
+    const l = await api.get("/admin/share-links");
     setLinks(l.data);
-    setStations(s.data);
   };
 
   useEffect(() => {
@@ -45,13 +34,13 @@ export default function ShareLinks() {
   }, []);
 
   const create = async () => {
-    if (!stationId) return toast.error("Select a station");
+    if (!stationName.trim()) return toast.error("Enter a station name");
     setSaving(true);
     try {
-      await api.post("/admin/share-links", { station_id: stationId });
+      await api.post("/admin/share-links", { station_name: stationName.trim() });
       toast.success("Share link created");
       setOpen(false);
-      setStationId("");
+      setStationName("");
       load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed");
@@ -102,19 +91,14 @@ export default function ShareLinks() {
               </DialogDescription>
             </DialogHeader>
             <div>
-              <Label className="text-slate-300">Station</Label>
-              <Select value={stationId} onValueChange={setStationId}>
-                <SelectTrigger className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1" data-testid="share-link-station-select">
-                  <SelectValue placeholder="Select a station" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#0B1120] border-slate-800 text-slate-100">
-                  {stations.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-slate-300">Station name</Label>
+              <Input
+                value={stationName}
+                onChange={(e) => setStationName(e.target.value)}
+                placeholder="e.g. Jaipur Junction"
+                className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1"
+                data-testid="share-link-station-name"
+              />
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setOpen(false)} className="text-slate-300">
