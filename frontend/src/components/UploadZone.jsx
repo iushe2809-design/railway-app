@@ -1,0 +1,152 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { CloudUpload, ImagePlus, X, Loader2, CheckCircle2 } from "lucide-react";
+
+const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
+
+export default function UploadZone({ onUpload, uploading, testid = "upload-zone" }) {
+  const [files, setFiles] = useState([]);
+  const [previews, setPreviews] = useState([]);
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const urls = files.map((f) => URL.createObjectURL(f));
+    setPreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [files]);
+
+  const addFiles = useCallback((list) => {
+    const next = [];
+    for (const f of Array.from(list)) {
+      if (!ACCEPTED.includes(f.type)) {
+        toast.error(`${f.name}: unsupported format (use JPEG/PNG/WEBP)`);
+        continue;
+      }
+      if (f.size > 10 * 1024 * 1024) {
+        toast.error(`${f.name}: too large (max 10MB)`);
+        continue;
+      }
+      next.push(f);
+    }
+    setFiles((prev) => [...prev, ...next]);
+  }, []);
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+  };
+
+  const submit = async () => {
+    if (!files.length) {
+      toast.error("Add at least one photo");
+      return;
+    }
+    const ok = await onUpload(files);
+    if (ok) {
+      setFiles([]);
+    }
+  };
+
+  const remove = (i) => setFiles((p) => p.filter((_, idx) => idx !== i));
+
+  return (
+    <div data-testid={testid}>
+      <div
+        className={`upload-zone rounded-xl p-8 sm:p-12 text-center cursor-pointer ${dragging ? "dragging" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        onClick={() => inputRef.current?.click()}
+        data-testid="upload-dropzone"
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          className="hidden"
+          onChange={(e) => addFiles(e.target.files)}
+          data-testid="upload-file-input"
+        />
+        <div className="mx-auto w-14 h-14 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center mb-4">
+          <CloudUpload className="w-6 h-6 text-blue-400" />
+        </div>
+        <div className="font-display text-lg sm:text-xl font-semibold">
+          Drop photos here, or tap to browse
+        </div>
+        <div className="text-sm text-slate-400 mt-2">
+          JPEG · PNG · WEBP &nbsp;·&nbsp; Up to 10 MB per file &nbsp;·&nbsp; Multiple at once
+        </div>
+      </div>
+
+      {files.length > 0 && (
+        <>
+          <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" data-testid="upload-previews">
+            {files.map((f, i) => (
+              <div key={i} className="relative group surface rounded-lg overflow-hidden">
+                <img
+                  src={previews[i]}
+                  alt={f.name}
+                  className="w-full h-32 object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => remove(i)}
+                  className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/70 hover:bg-red-500/90 flex items-center justify-center"
+                  aria-label="Remove image"
+                  data-testid={`remove-preview-${i}`}
+                >
+                  <X className="w-4 h-4 text-white" />
+                </button>
+                <div className="px-2 py-1.5 text-[11px] text-slate-400 truncate">{f.name}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+            <div className="text-sm text-slate-400 flex items-center gap-2">
+              <ImagePlus className="w-4 h-4" />
+              {files.length} photo{files.length === 1 ? "" : "s"} ready
+              <Badge variant="secondary" className="bg-slate-800 border-slate-700 text-slate-300">
+                Auto-analysis on submit
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setFiles([])}
+                disabled={uploading}
+                className="text-slate-400 hover:text-white"
+                data-testid="upload-clear-btn"
+              >
+                Clear
+              </Button>
+              <Button
+                onClick={submit}
+                disabled={uploading}
+                className="bg-blue-500 hover:bg-blue-400 text-white"
+                data-testid="upload-submit-btn"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 mr-2" /> Submit {files.length} photo{files.length === 1 ? "" : "s"}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
