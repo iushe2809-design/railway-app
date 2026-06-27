@@ -1,0 +1,128 @@
+{
+  "project_name": "Railway Station Cleanliness AI Inspector",
+  "theme": "Dark",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) adapted for Dark Navy",
+  "design_philosophy": "A highly functional, 'Control Room' aesthetic tailored for field operations and analytical oversight. Prioritizes data clarity, quick mobile uploads, and scanability. The interface uses a deep navy base to reduce eye strain, punctuated by high-contrast status colors (Green/Amber/Red) to instantly communicate station cleanliness.",
+  "typography": {
+    "font_families": {
+      "headings": "Cabinet Grotesk, sans-serif",
+      "body": "IBM Plex Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl tracking-tight font-bold",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-semibold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-base leading-relaxed text-slate-300",
+      "small_label": "text-sm uppercase tracking-[0.15em] font-medium text-slate-400"
+    },
+    "instructions": "Never use 'Inter' for headings. Apply strict tracking (letter-spacing) to headings for a technical, high-end feel. Use IBM Plex Sans for tables, data, and body text to ensure maximum legibility."
+  },
+  "colors": {
+    "backgrounds": {
+      "app": "#060B14",
+      "surface": "#0B1120",
+      "surface_elevated": "#111827"
+    },
+    "borders": {
+      "subtle": "#1E293B",
+      "active": "#334155"
+    },
+    "text": {
+      "primary": "#F8FAFC",
+      "secondary": "#94A3B8",
+      "tertiary": "#64748B"
+    },
+    "brand_accent": {
+      "primary": "#3B82F6",
+      "hover": "#60A5FA",
+      "subtle": "rgba(59, 130, 246, 0.1)"
+    },
+    "semantic_status": {
+      "clean": {
+        "text": "#10B981",
+        "bg": "rgba(16, 185, 129, 0.1)",
+        "border": "rgba(16, 185, 129, 0.2)"
+      },
+      "needs_attention": {
+        "text": "#F59E0B",
+        "bg": "rgba(245, 158, 11, 0.1)",
+        "border": "rgba(245, 158, 11, 0.2)"
+      },
+      "unclean": {
+        "text": "#EF4444",
+        "bg": "rgba(239, 68, 68, 0.1)",
+        "border": "rgba(239, 68, 68, 0.2)"
+      }
+    },
+    "instructions": "Strictly adhere to the dark navy palette. DO NOT use Teal (#1B93A4) anywhere. Ensure a minimum 4.5:1 contrast ratio for all text. Backgrounds should feel deep and technical, not muddy or grey."
+  },
+  "layout_and_spacing": {
+    "system": "Tailwind 8px scale",
+    "dashboard_grid": "MODE B: The 'Control Room' Grid. grid-cols-1 md:grid-cols-3 lg:grid-cols-4 with tight gaps (gap-4 or gap-6).",
+    "cards": "Use 'Technical' Grid Borders or flat 1px borders (border-slate-800). No heavy drop shadows; use subtle inner shadows or 1px strokes.",
+    "padding": "Generous internal padding for cards (p-6). Mobile views must have minimum p-4 edge padding.",
+    "mobile_optimizations": "Mobile-first grids. The Photo Upload interface must be highly touch-friendly on mobile, with a minimum touch target height of 48px for CTAs."
+  },
+  "components": {
+    "upload_zone": {
+      "style": "Large dashed border (border-2 border-dashed border-slate-700), bg-slate-900/50 hover:bg-slate-800/50 transition-colors.",
+      "interaction": "Drag & drop support on desktop. Large touch target for camera/gallery on mobile.",
+      "icons": "Use Phosphor Icons (e.g., CloudArrowUp) at 48px."
+    },
+    "data_tables": {
+      "style": "Flat, cardless or 1px bordered. Hover states on rows must shift background slightly (hover:bg-slate-800/50).",
+      "alignment": "Left-align textual data, right-align numbers/scores."
+    },
+    "status_badges": {
+      "style": "Soft background, solid text, 1px border. Rounded-full or rounded-md depending on context. E.g., Clean = text-emerald-400 bg-emerald-400/10 border-emerald-400/20."
+    },
+    "image_gallery": {
+      "style": "Grid of thumbnails (rounded-lg overflow-hidden border border-slate-800).",
+      "interaction": "Click to expand. Overlay must be crystal glass (backdrop-blur-xl bg-black/80)."
+    },
+    "ai_verdict_card": {
+      "style": "The focal point of the report. Needs 'Burstiness' (high contrast). If Unclean, subtle red glow via drop-shadow or soft radial gradient background."
+    },
+    "navigation": {
+      "style": "Solid or Crystal Glass dark header (bg-[#060B14]/80 backdrop-blur-md border-b border-slate-800). Sticky top."
+    }
+  },
+  "motion_and_interaction": {
+    "hover_states": "All buttons must lighten on hover and include a 0.2s transition. E.g., transition-colors duration-200.",
+    "data_loading": "Use pulse animations on skeletal shapes instead of standard spinners for a premium feel.",
+    "page_transitions": "Subtle fade-in and slide-up (translate-y-2 to translate-y-0)."
+  },
+  "media_and_assets": {
+    "libraries_required": [
+      "lucide-react (default for general UI icons)",
+      "@phosphor-icons/react (for premium, detailed dashboard icons like upload, analytics)",
+      "recharts (for score breakdown charts and trend lines)",
+      "date-fns (for date manipulation in reports)"
+    ],
+    "images": {
+      "login_hero_bg": {
+        "url": "https://images.pexels.com/photos/29654961/pexels-photo-29654961.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "A sleek train at night stationed on a platform. Use with a heavy bg-black/60 overlay for login/upload portals."
+      },
+      "abstract_texture": {
+        "url": "https://images.pexels.com/photos/12306417/pexels-photo-12306417.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Elegant dark blue abstract texture. Use sparingly as a subtle background layer for AI Verdict cards or Super Admin dashboard headers at 10-20% opacity."
+      }
+    }
+  },
+  "testing_and_accessibility": {
+    "data_testids": "CRITICAL: All interactive elements MUST include a data-testid attribute in kebab-case based on role (e.g., 'upload-photo-zone', 'submit-inspection-btn', 'override-verdict-btn', 'filter-date-picker').",
+    "contrast": "Must meet WCAG AA standards. Ensure text shadow is used if text is ever placed over images.",
+    "aria_labels": "All icon-only buttons (like gallery image expand or delete row) must have screen-reader visible aria-labels."
+  },
+  "instructions_to_main_agent": [
+    "Build a robust 'hybrid' app: A mobile-first, dead-simple Upload Portal for Station Masters, and a desktop-optimized, data-dense Dashboard for Supervisors/Admins.",
+    "Implement drag & drop using raw HTML5 events or a lightweight library, styled exactly as per the 'upload_zone' guidelines.",
+    "Use standard Shadcn components but heavily customize their background and border colors to match the Dark Navy palette (#0B1120 surfaces, border-slate-800).",
+    "Ensure the 'Overrule' mechanism in the admin panel is prominent, using a secondary button that opens a Dialog for notes.",
+    "Use Recharts for the analytics view (e.g., a bar chart showing scores area-by-area, or a pie chart for Clean vs Unclean stations).",
+    "Rely heavily on the Semantic Status colors to build a dashboard that can be read 'at a glance' from across the room."
+  ]
+}
