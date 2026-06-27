@@ -55,9 +55,9 @@ export default function Login() {
               <Train className="w-6 h-6 text-blue-400" />
             </div>
             <div>
-              <div className="font-display text-xl font-semibold">Railway Cleanliness</div>
+              <div className="font-display text-xl font-semibold">My Clean Station</div>
               <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                AI Inspector v1.0
+                Indian Railways
               </div>
             </div>
           </div>
@@ -90,8 +90,8 @@ export default function Login() {
               <Train className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <div className="font-display text-lg font-semibold">Railway Cleanliness</div>
-              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">AI Inspector</div>
+              <div className="font-display text-lg font-semibold">My Clean Station</div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Indian Railways</div>
             </div>
           </div>
           <div className="text-xs uppercase tracking-[0.25em] text-blue-400 mb-3">

@@ -45,7 +45,7 @@ export default function Layout() {
             </div>
             <div className="min-w-0">
               <div className="font-display text-base sm:text-lg font-semibold tracking-tight truncate">
-                Railway Cleanliness Inspector
+                My Clean Station
               </div>
               <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 hidden sm:block">
                 {isAdmin ? "Supervisor Console" : "Station Master Portal"}

@@ -109,7 +109,7 @@ export default function PublicUpload() {
           </div>
           <div>
             <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-              Railway Cleanliness · Public Upload
+              My Clean Station · Public Upload
             </div>
             <div className="font-display text-xl font-semibold">
               {station.station_name}
@@ -230,7 +230,7 @@ export default function PublicUpload() {
         </div>
 
         <div className="text-center text-[11px] uppercase tracking-[0.22em] text-slate-600 mt-8">
-          Indian Railways · Cleanliness AI Inspector
+          Indian Railways · My Clean Station
         </div>
       </div>
     </div>
