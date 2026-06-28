@@ -56,7 +56,11 @@ export default function Layout() {
             <div className="hidden md:flex flex-col items-end leading-tight">
               <div className="text-sm text-slate-200" data-testid="header-user-name">{user?.full_name}</div>
               <div className="text-[11px] uppercase tracking-[0.15em] text-slate-500">
-                {user?.role === "admin" ? "Super Admin" : "Station Master"}
+                {user?.role === "admin"
+                  ? "Super Admin"
+                  : user?.station_name
+                    ? `Station ${user.station_name}`
+                    : "Station Master"}
               </div>
             </div>
             <Button

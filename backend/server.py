@@ -470,14 +470,25 @@ async def _save_inspection(
 async def upload_inspection(
     user: Annotated[dict, Depends(require_user)],
     files: List[UploadFile] = File(...),
-    station_name: str = Form(...),
+    station_name: Optional[str] = Form(None),
     inspection_date: Optional[str] = Form(None),
 ):
-    if not station_name or not station_name.strip():
-        raise HTTPException(status_code=400, detail="Station name is required")
+    # SMs always upload for THEIR assigned station — client value is ignored.
+    if user["role"] == "sm":
+        assigned = user.get("station_name")
+        if not assigned:
+            raise HTTPException(
+                status_code=400,
+                detail="Your account has no assigned station. Contact the admin.",
+            )
+        effective_station = assigned
+    else:
+        if not station_name or not station_name.strip():
+            raise HTTPException(status_code=400, detail="Station name is required")
+        effective_station = station_name.strip()
     return await _save_inspection(
         station_id=None,
-        station_name=station_name.strip(),
+        station_name=effective_station,
         uploaded_by_id=user["id"],
         uploaded_by_name=user["full_name"],
         upload_source="sm" if user["role"] == "sm" else "admin",
@@ -765,35 +776,32 @@ async def get_file(
 # ============ Startup: init storage + seed admin/stations/SMs ============
 
 
-DEFAULT_STATIONS = [
-    ("New Delhi", "NDLS"),
-    ("Mumbai CST", "CSTM"),
-    ("Howrah Junction", "HWH"),
-    ("Chennai Central", "MAS"),
-    ("Bengaluru City", "SBC"),
-    ("Secunderabad", "SC"),
-    ("Ahmedabad Jn", "ADI"),
-    ("Lucknow", "LKO"),
-    ("Patna Jn", "PNBE"),
-    ("Bhopal Jn", "BPL"),
+DEFAULT_STATIONS: list = []  # Stations are now free-text codes tied to each SM
+
+# Per the official station-master roster (45 stations on the network).
+SM_ROSTER: list[tuple[str, str]] = [
+    ("sm001", "RNC"), ("sm002", "MURI"), ("sm003", "HTE"), ("sm004", "BLRG"),
+    ("sm005", "LOM"), ("sm006", "KRRA"), ("sm007", "GBX"), ("sm008", "BKPR"),
+    ("sm009", "PKF"), ("sm010", "PKC"), ("sm011", "KRKR"), ("sm012", "MCZ"),
+    ("sm013", "BANO"), ("sm014", "KNRN"), ("sm015", "TATI"), ("sm016", "PBB"),
+    ("sm017", "ORGA"), ("sm018", "PIS"), ("sm019", "TGB"), ("sm020", "NJA"),
+    ("sm021", "LAD"), ("sm022", "BICI"), ("sm023", "BODG"), ("sm024", "BLNG"),
+    ("sm025", "HRBR"), ("sm026", "GRE"), ("sm027", "MAEL"), ("sm028", "BRKP"),
+    ("sm029", "RMT"), ("sm030", "ILO"), ("sm031", "TRAN"), ("sm032", "SSIA"),
+    ("sm033", "TUL"), ("sm034", "LTMD"), ("sm035", "JHMR"), ("sm036", "GDBR"),
+    ("sm037", "NKM"), ("sm038", "TIS"), ("sm039", "GAG"), ("sm040", "JONA"),
+    ("sm041", "GATD"), ("sm042", "KITA"), ("sm043", "SLF"), ("sm044", "THO"),
+    ("sm045", "JAA"),
 ]
 
 
 async def seed():
-    # Stations
-    existing = await db.stations.count_documents({})
-    station_ids: List[str] = []
-    if existing == 0:
-        for name, code in DEFAULT_STATIONS:
-            sid = str(uuid.uuid4())
-            await db.stations.insert_one(
-                {"id": sid, "name": name, "code": code, "created_at": now_iso()}
-            )
-            station_ids.append(sid)
-        logger.info(f"Seeded {len(DEFAULT_STATIONS)} stations")
-    else:
-        stations = await db.stations.find({}, {"_id": 0}).to_list(100)
-        station_ids = [s["id"] for s in stations]
+    # Drop legacy seeded stations (Jaipur, NDLS, etc.). Stations are now defined
+    # purely by what SMs are assigned to via SM_ROSTER.
+    try:
+        await db.stations.delete_many({})
+    except Exception as e:
+        logger.warning(f"Could not clear stations: {e}")
 
     # Super admin
     if not await db.users.find_one({"username": "admin"}):
@@ -812,29 +820,44 @@ async def seed():
         )
         logger.info("Seeded super admin (admin / Admin@123)")
 
-    # 100 Station Masters
-    if await db.users.count_documents({"role": "sm"}) == 0 and station_ids:
-        bulk = []
-        for i in range(1, 101):
-            uname = f"sm{i:03d}"
-            sid = station_ids[(i - 1) % len(station_ids)]
-            station = await db.stations.find_one({"id": sid}, {"_id": 0})
-            bulk.append(
+    # Upsert official roster: 45 SMs, each pre-assigned to a station code.
+    valid_usernames: set[str] = set()
+    for uname, code in SM_ROSTER:
+        valid_usernames.add(uname)
+        existing = await db.users.find_one({"username": uname})
+        if existing:
+            await db.users.update_one(
+                {"username": uname},
+                {
+                    "$set": {
+                        "station_name": code,
+                        "station_id": None,
+                        "active": True,
+                    }
+                },
+            )
+        else:
+            await db.users.insert_one(
                 {
                     "id": str(uuid.uuid4()),
                     "username": uname,
                     "password_hash": hash_password("Station@123"),
-                    "full_name": f"Station Master {i:03d}",
+                    "full_name": f"SM {code}",
                     "role": "sm",
-                    "station_id": sid,
-                    "station_name": station["name"] if station else None,
+                    "station_id": None,
+                    "station_name": code,
                     "active": True,
                     "created_at": now_iso(),
                 }
             )
-        if bulk:
-            await db.users.insert_many(bulk)
-            logger.info(f"Seeded {len(bulk)} station masters (sm001..sm100 / Station@123)")
+
+    # Remove any SM accounts that aren't on the roster anymore (legacy sm046..sm100 etc.)
+    removed = await db.users.delete_many(
+        {"role": "sm", "username": {"$nin": list(valid_usernames)}}
+    )
+    if removed.deleted_count:
+        logger.info(f"Removed {removed.deleted_count} legacy SM accounts not on roster")
+    logger.info(f"Roster sync complete: {len(SM_ROSTER)} SMs active")
 
 
 @app.on_event("startup")

@@ -6,16 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { Camera, History, MapPin, CalendarDays } from "lucide-react";
+import { Camera, History, MapPin, CalendarDays, Lock } from "lucide-react";
 
 export default function SMDashboard() {
   const user = getUser();
   const [uploading, setUploading] = useState(false);
   const [recent, setRecent] = useState([]);
-  const [stationName, setStationName] = useState("");
   const [inspectionDate, setInspectionDate] = useState(
     () => new Date().toISOString().slice(0, 10)
   );
+
+  const assignedStation = user?.station_name || "";
 
   const loadRecent = async () => {
     try {
@@ -31,8 +32,8 @@ export default function SMDashboard() {
   }, []);
 
   const onUpload = async (files) => {
-    if (!stationName.trim()) {
-      toast.error("Please enter the station name");
+    if (!assignedStation) {
+      toast.error("No station is assigned to your account. Contact the admin.");
       return false;
     }
     if (!inspectionDate) {
@@ -42,7 +43,6 @@ export default function SMDashboard() {
     setUploading(true);
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));
-    fd.append("station_name", stationName.trim());
     fd.append("inspection_date", inspectionDate);
     try {
       await api.post("/inspections/upload", fd, {
@@ -69,23 +69,29 @@ export default function SMDashboard() {
           Upload today&apos;s photos
         </h1>
         <p className="text-slate-400 mt-2 max-w-2xl">
-          Enter the station name and date, then drop your photos below. The supervisor will
-          receive your submission for review.
+          Photos uploaded here will be analysed and forwarded to the supervisor for your station.
         </p>
       </div>
 
       <div className="surface rounded-xl p-5 md:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <Label className="text-slate-300 flex items-center gap-1.5">
-            <MapPin className="w-3.5 h-3.5 text-blue-400" /> Station name
+            <MapPin className="w-3.5 h-3.5 text-blue-400" /> Station
           </Label>
-          <Input
-            value={stationName}
-            onChange={(e) => setStationName(e.target.value)}
-            placeholder="e.g. Jaipur Junction"
-            className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1 h-11"
-            data-testid="sm-station-name-input"
-          />
+          <div
+            className="mt-1 h-11 rounded-md border border-slate-800 bg-[#0B1120] px-3 flex items-center justify-between"
+            data-testid="sm-station-display"
+          >
+            <span className="font-mono text-lg tracking-wide text-slate-100">
+              {assignedStation || "—"}
+            </span>
+            <span className="flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+              <Lock className="w-3 h-3" /> Locked
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">
+            Assigned to your User ID — cannot be changed.
+          </div>
         </div>
         <div>
           <Label className="text-slate-300 flex items-center gap-1.5">
@@ -119,7 +125,7 @@ export default function SMDashboard() {
         {recent.length === 0 ? (
           <div className="px-6 py-14 text-center text-slate-500">
             <Camera className="w-8 h-8 mx-auto mb-3 opacity-50" />
-            No submissions yet. Fill in the details and drop a few photos to get started.
+            No submissions yet. Pick the date and drop a few photos to get started.
           </div>
         ) : (
           <div className="divide-y divide-slate-800">

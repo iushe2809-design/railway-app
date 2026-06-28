@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration-3 regression for the 45-SM official roster + SM station lock-down. 25/25 new pytest cases pass on the preview deployment. Verified end-to-end: (a) seeding produces exactly 45 SMs + 1 admin (sm046..sm100 removed; db.stations empty); (b) all sample station mappings (sm001=RNC, sm007=GBX, sm010=PKC, sm022=BICI, sm025=HRBR, sm033=TUL, sm045=JAA, etc.) are exact; (c) SM token uploading with forged form field station_name='Hacked' persists the assigned code (sm007->GBX, sm045->JAA, sm010->PKC); (d) admin token can still pass free-text station_name (TEST_AdHocAdmin persisted); (e) /api/inspections/station-names returns GBX, JAA, PKC after the SM uploads; (f) idempotency: restarting backend twice keeps 45 SMs. UI: login as sm001/sm007/sm045 shows locked sm-station-display with the correct code + Lock icon, no station_name input is rendered, header subtitle reads 'Station <CODE>'. Admin Inspections page shows the new SM uploads (GBX/JAA/PKC) and the filter-station dropdown is present (data-testid='filter-station').",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/login",
+        "issues": [
+          "Demo-credentials hint card still reads 'SM: sm001 ... sm100 / Station@123'. After the roster cut-down only sm001..sm045 exist. A login attempt with sm046..sm100 will return 401. Update copy to 'sm001 … sm045 / Station@123'.",
+          "Left-side hero subtitle still says 'INDIAN RAILWAYS' / 'Vision-grade hygiene audits for Indian Railways.' Confirm this branding is still intended now that the network is the 45-station roster (not blocking)."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_roster_iter3.py",
+    "/app/test_reports/pytest/pytest_iter3.xml"
+  ],
+  "action_items": [
+    "Update Login.jsx demo-credentials hint card: replace 'sm001 … sm100' with 'sm001 … sm045' so users don't try usernames that no longer exist."
+  ],
+  "critical_code_review_comments": [
+    "server.py upload_inspection() correctly ignores client-supplied station_name when user.role=='sm' and uses user.station_name. Verified by forging station_name='Hacked' over the wire for sm007 and sm045 — DB still stored GBX and JAA respectively.",
+    "seed() is correctly idempotent: it $set-upserts each roster entry and runs a single delete_many({'role':'sm','username':{'$nin':valid_usernames}}). Two consecutive backend restarts left the count at exactly 45 SMs.",
+    "seed() clears db.stations on every startup (delete_many({})). This is fine while stations come purely from the SM roster, but be aware that any admin-created station via POST /api/admin/users (which still has the station_id branch on lines 217-222) would be wiped on next restart. Today there is no /api/stations create endpoint so this is moot.",
+    "Layout.jsx header subtitle 'Station <CODE>' implemented as requested.",
+    "SMDashboard.jsx no longer sends station_name in the FormData — backend resolves it. data-testid='sm-station-display' present with Lock icon and 'Locked' badge.",
+    "Public upload endpoint (/api/public/upload/{token}) still trusts link.station_name from db.share_links — unchanged, which is fine since the link itself was created by an admin."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_roster_iter3.py (NEW — 25 tests for roster, station lock-down, admin override, station-names endpoint, idempotency)",
+    "/app/memory/test_credentials.md (refreshed roster table — was empty)"
+  ],
+  "success_rate": {"backend": "100% (25/25 in test_roster_iter3.py)", "frontend": "100% on smoke (login + SM locked-station display for sm001/sm007/sm045 + admin/inspections with GBX/JAA/PKC visible + filter-station dropdown present)"},
+  "test_credentials": "admin / Admin@123 ; sm001..sm045 / Station@123. Full roster mapping is in /app/memory/test_credentials.md.",
+  "seed_data_creation": "Test runs created 5 new inspection rows via the API and they persist in MongoDB: 'GBX' (by sm007, 2026-07-01), 'JAA' (by sm045, 2026-07-01), 'PKC' (by sm010, 2026-07-01) and 'TEST_AdHocAdmin' (by admin, 2026-07-01). One additional GBX row exists from the forged-station_name test (still persisted as GBX, as expected). These are visible on /admin/inspections.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL='<preview-url>' pytest tests/test_roster_iter3.py -v. ~25s total (one Claude call per upload — 5 uploads, parallelised by xdist). conftest/fixtures kept session-scope to share admin login. Older iter-1/iter-2 tests still in /app/backend/tests/ and continue to pass.",
+  "rca of the issue": "N/A — no production bug found in this iteration. The only follow-up is the cosmetic stale 'sm100' hint on the login page (action_items[0])."
+}
