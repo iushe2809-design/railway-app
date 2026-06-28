@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { CloudUpload, Train, X, Loader2, CheckCircle2 } from "lucide-react";
 
-const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
+const ACCEPTED_PREFIX = "image/";
+const MAX_SIZE = 25 * 1024 * 1024;
 
 export default function PublicUpload() {
   const { token } = useParams();
@@ -40,12 +41,17 @@ export default function PublicUpload() {
   const addFiles = useCallback((list) => {
     const next = [];
     for (const f of Array.from(list)) {
-      if (!ACCEPTED.includes(f.type)) {
-        toast.error(`${f.name}: unsupported format`);
+      const t = (f.type || "").toLowerCase();
+      const name = (f.name || "").toLowerCase();
+      const looksLikeImage =
+        t.startsWith(ACCEPTED_PREFIX) ||
+        /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i.test(name);
+      if (!looksLikeImage) {
+        toast.error(`${f.name}: not an image file`);
         continue;
       }
-      if (f.size > 10 * 1024 * 1024) {
-        toast.error(`${f.name}: too large (max 10MB)`);
+      if (f.size > MAX_SIZE) {
+        toast.error(`${f.name}: too large (max 25MB)`);
         continue;
       }
       next.push(f);
@@ -168,7 +174,7 @@ export default function PublicUpload() {
                 <input
                   ref={inputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/*,.heic,.heif,.bmp,.tif,.tiff"
                   multiple
                   className="hidden"
                   onChange={(e) => addFiles(e.target.files)}
@@ -178,7 +184,7 @@ export default function PublicUpload() {
                   <CloudUpload className="w-5 h-5 text-blue-400" />
                 </div>
                 <div className="font-medium">Tap to browse or drop photos</div>
-                <div className="text-xs text-slate-500 mt-1">JPEG · PNG · WEBP · up to 10 MB</div>
+                <div className="text-xs text-slate-500 mt-1">Any image format (incl. iPhone HEIC) · up to 25 MB</div>
               </div>
 
               {files.length > 0 && (

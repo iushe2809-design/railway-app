@@ -37,7 +37,7 @@ from auth import (  # noqa: E402
     require_auth_factory,
     verify_password,
 )
-from ai_service import analyze_image  # noqa: E402
+from ai_service import analyze_image, normalize_image  # noqa: E402
 from storage import APP_NAME, get_object, init_storage, put_object  # noqa: E402
 
 # MongoDB connection
@@ -338,7 +338,51 @@ async def validate_share_link(token: str):
 
 # ============ Upload & Analyze ============
 
-ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_MIMES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "image/gif",
+    "image/bmp",
+    "image/tiff",
+}
+
+
+async def _calibration_for_station(station_name: str, limit: int = 5) -> list:
+    """Recent supervisor overrides at this station — used to teach the AI."""
+    docs = (
+        await db.inspections.find(
+            {
+                "station_name": station_name,
+                "is_deleted": False,
+                "photos.override": {"$ne": None},
+            },
+            {"_id": 0, "photos": 1, "created_at": 1},
+        )
+        .sort("created_at", -1)
+        .to_list(20)
+    )
+    examples = []
+    for d in docs:
+        for p in d.get("photos", []):
+            ov = p.get("override")
+            ai = p.get("ai_analysis") or {}
+            if not ov:
+                continue
+            examples.append(
+                {
+                    "ai_rating": ai.get("rating"),
+                    "ai_score": ai.get("score"),
+                    "override_rating": ov.get("rating"),
+                    "notes": ov.get("notes"),
+                }
+            )
+            if len(examples) >= limit:
+                return examples
+    return examples
 
 
 async def _save_inspection(
@@ -353,23 +397,31 @@ async def _save_inspection(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
     photos = []
+    calibration = await _calibration_for_station(station_name)
     for f in files:
         content_type = (f.content_type or "").lower()
-        if content_type not in ALLOWED_MIMES:
+        if content_type not in ALLOWED_MIMES and not content_type.startswith("image/"):
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported file type: {content_type}. Use JPEG/PNG/WEBP.",
+                detail=f"Unsupported file type: {content_type or 'unknown'}. Please upload an image.",
             )
         data = await f.read()
-        if len(data) > 10 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="File too large (max 10MB)")
-        ext = content_type.split("/")[-1].replace("jpeg", "jpg")
+        if len(data) > 25 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large (max 25MB)")
+        # Normalize to JPEG if needed (HEIC, BMP, TIFF, GIF, very large -> JPEG)
+        norm_bytes, norm_ct = normalize_image(data, content_type)
+        ext = norm_ct.split("/")[-1].replace("jpeg", "jpg")
         slug = re.sub(r"[^a-z0-9]+", "-", station_name.lower())[:40] or "station"
         path = f"{APP_NAME}/stations/{slug}/{uuid.uuid4()}.{ext}"
-        result = put_object(path, data, content_type)
-        # Run AI analysis
+        result = put_object(path, norm_bytes, norm_ct)
+        # Run AI analysis with station-specific calibration
         try:
-            ai = await analyze_image(data, content_type)
+            ai = await analyze_image(
+                norm_bytes,
+                norm_ct,
+                station_name=station_name,
+                calibration_examples=calibration,
+            )
         except Exception as e:
             logger.exception(f"AI analysis failed: {e}")
             ai = {
@@ -385,8 +437,8 @@ async def _save_inspection(
                 "id": str(uuid.uuid4()),
                 "storage_path": result["path"],
                 "original_filename": f.filename,
-                "content_type": content_type,
-                "size": result.get("size", len(data)),
+                "content_type": norm_ct,
+                "size": result.get("size", len(norm_bytes)),
                 "ai_analysis": ai,
                 "override": None,
                 "uploaded_at": now_iso(),

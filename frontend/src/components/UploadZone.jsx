@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CloudUpload, ImagePlus, X, Loader2, CheckCircle2 } from "lucide-react";
 
-const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
+const ACCEPTED_PREFIX = "image/";
+const MAX_SIZE = 25 * 1024 * 1024;
 
 export default function UploadZone({ onUpload, uploading, testid = "upload-zone" }) {
   const [files, setFiles] = useState([]);
@@ -21,12 +22,17 @@ export default function UploadZone({ onUpload, uploading, testid = "upload-zone"
   const addFiles = useCallback((list) => {
     const next = [];
     for (const f of Array.from(list)) {
-      if (!ACCEPTED.includes(f.type)) {
-        toast.error(`${f.name}: unsupported format (use JPEG/PNG/WEBP)`);
+      const t = (f.type || "").toLowerCase();
+      const name = (f.name || "").toLowerCase();
+      const looksLikeImage =
+        t.startsWith(ACCEPTED_PREFIX) ||
+        /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i.test(name);
+      if (!looksLikeImage) {
+        toast.error(`${f.name}: not an image file`);
         continue;
       }
-      if (f.size > 10 * 1024 * 1024) {
-        toast.error(`${f.name}: too large (max 10MB)`);
+      if (f.size > MAX_SIZE) {
+        toast.error(`${f.name}: too large (max 25MB)`);
         continue;
       }
       next.push(f);
@@ -69,7 +75,7 @@ export default function UploadZone({ onUpload, uploading, testid = "upload-zone"
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/*,.heic,.heif,.bmp,.tif,.tiff"
           multiple
           className="hidden"
           onChange={(e) => addFiles(e.target.files)}
@@ -82,7 +88,7 @@ export default function UploadZone({ onUpload, uploading, testid = "upload-zone"
           Drop photos here, or tap to browse
         </div>
         <div className="text-sm text-slate-400 mt-2">
-          JPEG · PNG · WEBP &nbsp;·&nbsp; Up to 10 MB per file &nbsp;·&nbsp; Multiple at once
+          Any photo format (incl. iPhone HEIC) &nbsp;·&nbsp; Up to 25 MB per file &nbsp;·&nbsp; Multiple at once
         </div>
       </div>
 
@@ -150,3 +156,4 @@ export default function UploadZone({ onUpload, uploading, testid = "upload-zone"
     </div>
   );
 }
+
