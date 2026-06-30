@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api, { fileUrl } from "@/lib/api";
 import StatusBadge from "@/components/StatusBadge";
 import DatePicker from "@/components/DatePicker";
@@ -13,8 +13,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
-import { Filter, Search, ArrowRight } from "lucide-react";
+import { Filter, Search, ArrowRight, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function AdminInspections() {
   const [stationNames, setStationNames] = useState([]);
@@ -59,7 +71,7 @@ export default function AdminInspections() {
       <div>
         <div className="text-xs uppercase tracking-[0.22em] text-blue-400 mb-2">Audit log</div>
         <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">
-          Inspections
+          Stations Upload
         </h1>
         <p className="text-slate-400 mt-2 text-sm">
           Filter by date and station name (as entered by Station Masters).
@@ -173,36 +185,95 @@ export default function AdminInspections() {
         ) : (
           <div className="divide-y divide-slate-800">
             {filtered.map((insp) => (
-              <Link
-                to={`/admin/inspections/${insp.id}`}
-                key={insp.id}
-                className="px-5 py-4 hover:bg-slate-800/40 flex items-center gap-4"
-                data-testid={`inspection-row-${insp.id}`}
-              >
-                <div className="flex -space-x-2">
-                  {insp.photos.slice(0, 3).map((p) => (
-                    <img
-                      key={p.id}
-                      src={fileUrl(p.storage_path)}
-                      alt="thumb"
-                      className="w-11 h-11 rounded-md object-cover border border-slate-800"
-                    />
-                  ))}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-slate-100 truncate">{insp.station_name}</div>
-                  <div className="text-xs text-slate-500 mt-0.5 truncate">
-                    {insp.inspection_date || format(new Date(insp.created_at), "PP")} · {insp.photos.length} photo
-                    {insp.photos.length === 1 ? "" : "s"} · by {insp.uploaded_by_name}
+              <div key={insp.id} className="px-5 py-4 hover:bg-slate-800/40 flex items-center gap-4" data-testid={`inspection-row-${insp.id}`}>
+                <Link
+                  to={`/admin/inspections/${insp.id}`}
+                  className="flex-1 flex items-center gap-4 min-w-0"
+                >
+                  <div className="flex -space-x-2">
+                    {insp.photos.slice(0, 3).map((p) => (
+                      <img
+                        key={p.id}
+                        src={fileUrl(p.storage_path)}
+                        alt="thumb"
+                        className="w-11 h-11 rounded-md object-cover border border-slate-800"
+                      />
+                    ))}
                   </div>
-                </div>
-                <StatusBadge rating={insp.aggregate_rating} score={insp.aggregate_score} size="sm" />
-                <ArrowRight className="w-4 h-4 text-slate-500" />
-              </Link>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-slate-100 truncate">{insp.station_name}</div>
+                    <div className="text-xs text-slate-500 mt-0.5 truncate">
+                      {insp.inspection_date || format(new Date(insp.created_at), "PP")} · {insp.photos.length} photo
+                      {insp.photos.length === 1 ? "" : "s"} · by {insp.uploaded_by_name}
+                    </div>
+                  </div>
+                  <StatusBadge rating={insp.aggregate_rating} score={insp.aggregate_score} size="sm" />
+                  <ArrowRight className="w-4 h-4 text-slate-500" />
+                </Link>
+                <DeleteInspectionButton
+                  inspectionId={insp.id}
+                  stationName={insp.station_name}
+                  onDeleted={load}
+                />
+              </div>
             ))}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function DeleteInspectionButton({ inspectionId, stationName, onDeleted }) {
+  const [deleting, setDeleting] = useState(false);
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/inspections/${inspectionId}`);
+      toast.success("Upload deleted");
+      onDeleted();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed to delete");
+    } finally {
+      setDeleting(false);
+    }
+  };
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+          aria-label="Delete upload"
+          data-testid={`delete-inspection-${inspectionId}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent className="bg-[#0B1120] border-slate-800 text-slate-100">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this upload?</AlertDialogTitle>
+          <AlertDialogDescription className="text-slate-400">
+            This will permanently remove the {stationName} upload and all its photos from reports.
+            This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="bg-slate-800 text-slate-200 hover:bg-slate-700 border-slate-700">
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={remove}
+            disabled={deleting}
+            className="bg-red-500 hover:bg-red-400 text-white"
+            data-testid={`confirm-delete-${inspectionId}`}
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

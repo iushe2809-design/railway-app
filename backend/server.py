@@ -644,6 +644,28 @@ async def override_photo(
     return {"ok": True, "aggregate_score": score, "aggregate_rating": rating}
 
 
+@api_router.delete("/inspections/{inspection_id}")
+async def delete_inspection(
+    inspection_id: str, user: Annotated[dict, Depends(require_user)]
+):
+    """Admin-only soft delete of an inspection record."""
+    require_admin(user)
+    res = await db.inspections.update_one(
+        {"id": inspection_id, "is_deleted": False},
+        {
+            "$set": {
+                "is_deleted": True,
+                "deleted_at": now_iso(),
+                "deleted_by_id": user["id"],
+                "deleted_by_name": user["full_name"],
+            }
+        },
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Inspection not found")
+    return {"ok": True}
+
+
 # ============ Reports ============
 
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import api, { fileUrl } from "@/lib/api";
 import StatusBadge from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,17 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -22,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { format } from "date-fns";
-import { ArrowLeft, Gavel, Sparkles, ListChecks, AlertTriangle, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Gavel, Sparkles, ListChecks, AlertTriangle, Image as ImageIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   ResponsiveContainer,
@@ -36,8 +47,10 @@ import {
 
 export default function InspectionDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [insp, setInsp] = useState(null);
   const [openPhoto, setOpenPhoto] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     const res = await api.get(`/inspections/${id}`);
@@ -76,6 +89,51 @@ export default function InspectionDetail() {
               {insp.aggregate_score}
               <span className="text-slate-500 text-base">/100</span>
             </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 mt-2"
+                  data-testid="delete-inspection-btn"
+                >
+                  <Trash2 className="w-4 h-4 mr-1.5" /> Delete entry
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="bg-[#0B1120] border-slate-800 text-slate-100">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this upload?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-slate-400">
+                    This will permanently remove the {insp.station_name} upload and all its photos
+                    from reports. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="bg-slate-800 text-slate-200 hover:bg-slate-700 border-slate-700">
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={deleting}
+                    onClick={async () => {
+                      setDeleting(true);
+                      try {
+                        await api.delete(`/inspections/${insp.id}`);
+                        toast.success("Upload deleted");
+                        navigate("/admin/inspections", { replace: true });
+                      } catch (e) {
+                        toast.error(e?.response?.data?.detail || "Failed to delete");
+                      } finally {
+                        setDeleting(false);
+                      }
+                    }}
+                    className="bg-red-500 hover:bg-red-400 text-white"
+                    data-testid="confirm-delete-inspection"
+                  >
+                    {deleting ? "Deleting…" : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
       </div>
