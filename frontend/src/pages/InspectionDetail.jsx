@@ -165,10 +165,23 @@ function PhotoCard({ photo, index, inspectionId, onOpenPhoto, onUpdated }) {
                 <ResponsiveContainer>
                   <BarChart data={ai.area_breakdown} layout="vertical" margin={{ left: 60, right: 10 }}>
                     <CartesianGrid stroke="#1E293B" horizontal={false} />
-                    <XAxis type="number" domain={[0, 100]} stroke="#64748B" fontSize={11} />
-                    <YAxis dataKey="aspect" type="category" stroke="#94A3B8" fontSize={11} width={120} />
+                    <XAxis
+                      type="number"
+                      domain={[0, 100]}
+                      stroke="#FFFFFF"
+                      tick={{ fill: "#FFFFFF", fontSize: 11 }}
+                    />
+                    <YAxis
+                      dataKey="aspect"
+                      type="category"
+                      stroke="#FFFFFF"
+                      tick={{ fill: "#FFFFFF", fontSize: 11 }}
+                      width={120}
+                    />
                     <Tooltip
-                      contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#F8FAFC" }}
+                      contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" }}
+                      labelStyle={{ color: "#FFFFFF" }}
+                      itemStyle={{ color: "#FFFFFF" }}
                     />
                     <Bar dataKey="score" fill="#3B82F6" radius={[0, 4, 4, 0]} />
                   </BarChart>

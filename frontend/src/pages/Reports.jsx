@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
+import DatePicker from "@/components/DatePicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -123,23 +124,27 @@ export default function Reports() {
           </div>
           <div>
             <Label className="text-xs text-slate-400">From</Label>
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1"
-              data-testid="reports-date-from"
-            />
+            <div className="mt-1">
+              <DatePicker
+                value={from}
+                onChange={setFrom}
+                placeholder="From date"
+                testid="reports-date-from"
+                max={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
           </div>
           <div>
             <Label className="text-xs text-slate-400">To</Label>
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1"
-              data-testid="reports-date-to"
-            />
+            <div className="mt-1">
+              <DatePicker
+                value={to}
+                onChange={setTo}
+                placeholder="To date"
+                testid="reports-date-to"
+                max={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -164,9 +169,13 @@ export default function Reports() {
                 <ResponsiveContainer>
                   <LineChart data={data.daily_uploads}>
                     <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" />
-                    <XAxis dataKey="date" stroke="#64748B" fontSize={11} />
-                    <YAxis stroke="#64748B" fontSize={11} />
-                    <Tooltip contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#F8FAFC" }} />
+                    <XAxis dataKey="date" stroke="#FFFFFF" tick={{ fill: "#FFFFFF", fontSize: 11 }} />
+                    <YAxis stroke="#FFFFFF" tick={{ fill: "#FFFFFF", fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" }}
+                      labelStyle={{ color: "#FFFFFF" }}
+                      itemStyle={{ color: "#FFFFFF" }}
+                    />
                     <Line type="monotone" dataKey="photos" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -180,9 +189,9 @@ export default function Reports() {
                 <ResponsiveContainer>
                   <BarChart data={data.station_breakdown}>
                     <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="station_name" stroke="#64748B" fontSize={10} angle={-20} textAnchor="end" height={60} />
-                    <YAxis stroke="#64748B" fontSize={11} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#F8FAFC" }} />
+                    <XAxis dataKey="station_name" stroke="#FFFFFF" tick={{ fill: "#FFFFFF", fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
+                    <YAxis stroke="#FFFFFF" tick={{ fill: "#FFFFFF", fontSize: 11 }} domain={[0, 100]} />
+                    <Tooltip contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" }} labelStyle={{ color: "#FFFFFF" }} itemStyle={{ color: "#FFFFFF" }} />
                     <Bar dataKey="avg_score" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

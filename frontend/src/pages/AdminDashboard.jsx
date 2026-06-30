@@ -120,7 +120,9 @@ export default function AdminDashboard() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#F8FAFC" }}
+                  contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" }}
+                  labelStyle={{ color: "#FFFFFF" }}
+                  itemStyle={{ color: "#FFFFFF" }}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -143,10 +145,23 @@ export default function AdminDashboard() {
             <ResponsiveContainer>
               <BarChart data={stationBars} margin={{ top: 10, right: 10, left: -20, bottom: 30 }}>
                 <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" stroke="#64748B" fontSize={11} angle={-15} textAnchor="end" height={50} />
-                <YAxis stroke="#64748B" fontSize={11} domain={[0, 100]} />
+                <XAxis
+                  dataKey="name"
+                  stroke="#FFFFFF"
+                  tick={{ fill: "#FFFFFF", fontSize: 11 }}
+                  angle={-15}
+                  textAnchor="end"
+                  height={50}
+                />
+                <YAxis
+                  stroke="#FFFFFF"
+                  tick={{ fill: "#FFFFFF", fontSize: 11 }}
+                  domain={[0, 100]}
+                />
                 <Tooltip
-                  contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#F8FAFC" }}
+                  contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" }}
+                  labelStyle={{ color: "#FFFFFF" }}
+                  itemStyle={{ color: "#FFFFFF" }}
                 />
                 <Bar dataKey="score" fill="#3B82F6" radius={[4, 4, 0, 0]} />
               </BarChart>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { fileUrl } from "@/lib/api";
 import StatusBadge from "@/components/StatusBadge";
+import DatePicker from "@/components/DatePicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -105,23 +106,27 @@ export default function AdminInspections() {
           </div>
           <div>
             <Label className="text-xs text-slate-400">From</Label>
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1"
-              data-testid="filter-date-from"
-            />
+            <div className="mt-1">
+              <DatePicker
+                value={from}
+                onChange={setFrom}
+                placeholder="From date"
+                testid="filter-date-from"
+                max={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
           </div>
           <div>
             <Label className="text-xs text-slate-400">To</Label>
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1"
-              data-testid="filter-date-to"
-            />
+            <div className="mt-1">
+              <DatePicker
+                value={to}
+                onChange={setTo}
+                placeholder="To date"
+                testid="filter-date-to"
+                max={new Date().toISOString().slice(0, 10)}
+              />
+            </div>
           </div>
           <div>
             <Label className="text-xs text-slate-400">Search</Label>
