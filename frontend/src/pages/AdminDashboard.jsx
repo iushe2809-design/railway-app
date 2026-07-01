@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import StatusBadge from "@/components/StatusBadge";
 import DatePicker from "@/components/DatePicker";
+import Leaderboard from "@/components/Leaderboard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,8 @@ import {
   TrendingDown,
   ArrowRight,
   Filter,
+  Award,
+  ShieldAlert,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -31,19 +34,25 @@ import { format } from "date-fns";
 
 const COLORS = {
   Clean: "#10B981",
-  "Needs Attention": "#F59E0B",
-  Unclean: "#EF4444",
+  "Need Attention": "#F59E0B",
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+const AXIS_TICK = { fill: "#FFFFFF", fontSize: 11 };
+const TOOLTIP_STYLE = {
+  contentStyle: { background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" },
+  labelStyle: { color: "#FFFFFF" },
+  itemStyle: { color: "#FFFFFF" },
+};
 
 export default function AdminDashboard() {
   const [from, setFrom] = useState(todayIso());
   const [to, setTo] = useState(todayIso());
   const [summary, setSummary] = useState(null);
   const [recent, setRecent] = useState([]);
+  const [overallLeaderboard, setOverallLeaderboard] = useState([]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const params = new URLSearchParams();
     if (from) params.set("date_from", from);
     if (to) params.set("date_to", to);
@@ -55,12 +64,14 @@ export default function AdminDashboard() {
     ]);
     setSummary(s.data);
     setRecent(r.data);
-  };
+  }, [from, to]);
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to]);
+    // Live auto-refresh
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [load]);
 
   const dateLabel =
     from && to
@@ -69,13 +80,14 @@ export default function AdminDashboard() {
         : `${format(new Date(from), "PP")} → ${format(new Date(to), "PP")}`
       : "All time";
 
+  const best = overallLeaderboard[0];
+  const worst = overallLeaderboard.length > 1 ? overallLeaderboard[overallLeaderboard.length - 1] : null;
+
   return (
     <div className="space-y-8" data-testid="admin-dashboard">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="text-xs uppercase tracking-[0.22em] text-blue-400 mb-2">
-            {dateLabel}
-          </div>
+          <div className="text-xs uppercase tracking-[0.22em] text-blue-400 mb-2">{dateLabel}</div>
           <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">
             Operational overview
           </h1>
@@ -87,6 +99,25 @@ export default function AdminDashboard() {
         </Link>
       </div>
 
+      {/* Best / Worst callouts — auto-refresh live */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CalloutCard
+          tone="green"
+          icon={Award}
+          label="Best Clean Station"
+          station={best}
+          testid="callout-best"
+        />
+        <CalloutCard
+          tone="red"
+          icon={ShieldAlert}
+          label="Worst Clean Station"
+          station={worst}
+          testid="callout-worst"
+        />
+      </div>
+
+      {/* Date-range filter */}
       <div className="surface rounded-xl p-4 md:p-5">
         <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400 mb-4">
           <Filter className="w-3.5 h-3.5" /> Date range
@@ -105,39 +136,18 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
+            <Button size="sm" variant="outline"
               onClick={() => { setFrom(todayIso()); setTo(todayIso()); }}
               className="border-slate-700 text-slate-200 hover:bg-slate-800"
-              data-testid="dashboard-preset-today"
-            >
-              Today
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                const d = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
-                setFrom(d); setTo(todayIso());
-              }}
+              data-testid="dashboard-preset-today">Today</Button>
+            <Button size="sm" variant="outline"
+              onClick={() => { const d = new Date(Date.now() - 6*86400000).toISOString().slice(0,10); setFrom(d); setTo(todayIso()); }}
               className="border-slate-700 text-slate-200 hover:bg-slate-800"
-              data-testid="dashboard-preset-7d"
-            >
-              Last 7d
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                const d = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
-                setFrom(d); setTo(todayIso());
-              }}
+              data-testid="dashboard-preset-7d">Last 7d</Button>
+            <Button size="sm" variant="outline"
+              onClick={() => { const d = new Date(Date.now() - 29*86400000).toISOString().slice(0,10); setFrom(d); setTo(todayIso()); }}
               className="border-slate-700 text-slate-200 hover:bg-slate-800"
-              data-testid="dashboard-preset-30d"
-            >
-              30d
-            </Button>
+              data-testid="dashboard-preset-30d">30d</Button>
           </div>
         </div>
       </div>
@@ -147,13 +157,55 @@ export default function AdminDashboard() {
       ) : (
         <DashboardBody summary={summary} recent={recent} dateLabel={dateLabel} />
       )}
+
+      {/* Leaderboard section — its own date range */}
+      <Leaderboard onOverall={setOverallLeaderboard} />
+    </div>
+  );
+}
+
+function CalloutCard({ tone, icon: Icon, label, station, testid }) {
+  const tones = {
+    green: {
+      wrap: "bg-emerald-500/10 border-emerald-500/40",
+      icon: "bg-emerald-500/20 border-emerald-500/40 text-emerald-400",
+      value: "text-emerald-300",
+      accent: "text-emerald-400",
+    },
+    red: {
+      wrap: "bg-red-500/10 border-red-500/40",
+      icon: "bg-red-500/20 border-red-500/40 text-red-400",
+      value: "text-red-300",
+      accent: "text-red-400",
+    },
+  };
+  const t = tones[tone];
+  return (
+    <div className={`rounded-xl border p-5 relative overflow-hidden ${t.wrap}`} data-testid={testid}>
+      <div className="absolute inset-0 grid-bg opacity-20 pointer-events-none" />
+      <div className="relative flex items-center gap-4">
+        <div className={`w-12 h-12 rounded-md border flex items-center justify-center ${t.icon}`}>
+          <Icon className="w-6 h-6" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className={`text-[11px] uppercase tracking-[0.22em] ${t.accent}`}>{label}</div>
+          <div className={`font-display text-2xl sm:text-3xl font-bold tracking-tight mt-0.5 truncate ${t.value}`}>
+            {station?.station_name || "—"}
+          </div>
+          {station && (
+            <div className="text-xs text-slate-400 mt-1">
+              {station.clean_pct}% clean · {station.total} upload{station.total === 1 ? "" : "s"} · avg score {station.avg_score}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 function DashboardBody({ summary, recent, dateLabel }) {
   const pieData = Object.entries(summary.rating_counts).map(([name, value]) => ({ name, value }));
-  const stationBars = summary.station_breakdown.slice(0, 8).map((s) => ({
+  const stationBars = summary.station_breakdown.slice(0, 10).map((s) => ({
     name: s.station_name,
     score: s.avg_score,
   }));
@@ -164,7 +216,7 @@ function DashboardBody({ summary, recent, dateLabel }) {
         <Stat icon={Activity} label="Stations uploads" value={summary.total_inspections} tint="blue" testid="stat-inspections" />
         <Stat icon={Camera} label={`Photos analysed (${dateLabel})`} value={summary.total_photos} tint="blue" testid="stat-photos" />
         <Stat icon={Train} label="Stations active" value={summary.station_breakdown.length} tint="emerald" testid="stat-stations" />
-        <Stat icon={AlertTriangle} label="Unclean flagged" value={summary.rating_counts["Unclean"] || 0} tint="red" testid="stat-unclean" />
+        <Stat icon={AlertTriangle} label="Need Attention" value={summary.rating_counts["Need Attention"] || 0} tint="red" testid="stat-unclean" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
@@ -175,21 +227,17 @@ function DashboardBody({ summary, recent, dateLabel }) {
               <PieChart>
                 <Pie data={pieData} dataKey="value" innerRadius={50} outerRadius={80} paddingAngle={3}>
                   {pieData.map((d) => (
-                    <Cell key={d.name} fill={COLORS[d.name]} stroke="none" />
+                    <Cell key={d.name} fill={COLORS[d.name] || "#94A3B8"} stroke="none" />
                   ))}
                 </Pie>
-                <Tooltip
-                  contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" }}
-                  labelStyle={{ color: "#FFFFFF" }}
-                  itemStyle={{ color: "#FFFFFF" }}
-                />
+                <Tooltip {...TOOLTIP_STYLE} />
               </PieChart>
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap gap-2 mt-3">
             {pieData.map((d) => (
               <Badge key={d.name} variant="secondary" className="bg-slate-800/70 border border-slate-700 text-slate-300">
-                <span className="w-2 h-2 rounded-full mr-1.5" style={{ background: COLORS[d.name] }} />
+                <span className="w-2 h-2 rounded-full mr-1.5" style={{ background: COLORS[d.name] || "#94A3B8" }} />
                 {d.name} · {d.value}
               </Badge>
             ))}
@@ -202,13 +250,9 @@ function DashboardBody({ summary, recent, dateLabel }) {
             <ResponsiveContainer>
               <BarChart data={stationBars} margin={{ top: 10, right: 10, left: -20, bottom: 30 }}>
                 <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" stroke="#FFFFFF" tick={{ fill: "#FFFFFF", fontSize: 11 }} angle={-15} textAnchor="end" height={50} />
-                <YAxis stroke="#FFFFFF" tick={{ fill: "#FFFFFF", fontSize: 11 }} domain={[0, 100]} />
-                <Tooltip
-                  contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" }}
-                  labelStyle={{ color: "#FFFFFF" }}
-                  itemStyle={{ color: "#FFFFFF" }}
-                />
+                <XAxis dataKey="name" stroke="#FFFFFF" tick={AXIS_TICK} angle={-15} textAnchor="end" height={50} />
+                <YAxis stroke="#FFFFFF" tick={AXIS_TICK} domain={[0, 100]} />
+                <Tooltip {...TOOLTIP_STYLE} />
                 <Bar dataKey="score" fill="#3B82F6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -220,12 +264,10 @@ function DashboardBody({ summary, recent, dateLabel }) {
         <div className="surface rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-800 flex items-center gap-2">
             <TrendingDown className="w-4 h-4 text-red-400" />
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Unclean alerts</div>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Need Attention alerts</div>
           </div>
           {summary.unclean_details.length === 0 ? (
-            <div className="px-5 py-10 text-center text-slate-500 text-sm">
-              No unclean stations in this period.
-            </div>
+            <div className="px-5 py-10 text-center text-slate-500 text-sm">No flagged stations in this period.</div>
           ) : (
             <div className="divide-y divide-slate-800 max-h-96 overflow-y-auto">
               {summary.unclean_details.slice(0, 8).map((u) => (
@@ -234,10 +276,10 @@ function DashboardBody({ summary, recent, dateLabel }) {
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-slate-100 truncate">{u.station_name}</div>
                       <div className="text-xs text-slate-500 mt-0.5 truncate">
-                        {u.inspection_date || format(new Date(u.created_at), "PP")} · {u.issues[0] || "Unclean"}
+                        {u.inspection_date || format(new Date(u.created_at), "PP")} · {u.issues[0] || "Need Attention"}
                       </div>
                     </div>
-                    <StatusBadge rating="Unclean" score={u.score} size="sm" />
+                    <StatusBadge rating="Need Attention" score={u.score} size="sm" />
                   </div>
                 </Link>
               ))}

@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import DatePicker from "@/components/DatePicker";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -23,9 +22,19 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import { Filter, Download, AlertTriangle } from "lucide-react";
+import { Filter, Download, AlertTriangle, FileDown } from "lucide-react";
+import { toast } from "sonner";
+
+const AXIS_TICK = { fill: "#FFFFFF", fontSize: 11 };
+const AXIS_TICK_SM = { fill: "#FFFFFF", fontSize: 10 };
+const TOOLTIP_STYLE = {
+  contentStyle: { background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" },
+  labelStyle: { color: "#FFFFFF" },
+  itemStyle: { color: "#FFFFFF" },
+};
 
 function toCsv(rows) {
+  if (!rows.length) return "";
   const header = Object.keys(rows[0]).join(",");
   const body = rows
     .map((r) =>
@@ -40,12 +49,11 @@ function toCsv(rows) {
 export default function Reports() {
   const [stationNames, setStationNames] = useState([]);
   const [stationName, setStationName] = useState("all");
-  const [from, setFrom] = useState(() => {
-    const d = new Date(Date.now() - 30 * 86400000);
-    return d.toISOString().slice(0, 10);
-  });
+  const [from, setFrom] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
   const [data, setData] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const chartsRef = useRef(null);
 
   useEffect(() => {
     api.get("/inspections/station-names").then((r) => setStationNames(r.data));
@@ -67,7 +75,15 @@ export default function Reports() {
 
   const exportCsv = () => {
     if (!data || data.station_breakdown.length === 0) return;
-    const csv = toCsv(data.station_breakdown);
+    const rows = data.station_breakdown.map((s) => ({
+      station: s.station_name,
+      inspections_days: s.inspection_days,
+      total_uploads: s.total,
+      clean_pct: s.clean_pct,
+      need_attention_pct: s.need_attention_pct,
+      avg_score: s.avg_score,
+    }));
+    const csv = toCsv(rows);
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -77,25 +93,102 @@ export default function Reports() {
     URL.revokeObjectURL(url);
   };
 
+  const exportPdf = async () => {
+    if (!data || data.station_breakdown.length === 0) {
+      toast.error("No data to export");
+      return;
+    }
+    setExporting(true);
+    try {
+      const [{ default: jsPDF }, autoTableModule, { default: html2canvas }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+        import("html2canvas"),
+      ]);
+      const autoTable = autoTableModule.default;
+
+      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text("My Clean Station — Station Report", 40, 40);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(
+        `Range: ${from} to ${to}${stationName !== "all" ? ` · Station: ${stationName}` : ""}`,
+        40,
+        58
+      );
+      doc.text(
+        `Generated: ${new Date().toLocaleString()} · Stations: ${data.station_breakdown.length} · Photos: ${data.total_photos}`,
+        40,
+        72
+      );
+
+      // Snapshot the bar chart into an image
+      if (chartsRef.current) {
+        const canvas = await html2canvas(chartsRef.current, {
+          backgroundColor: "#0B1120",
+          scale: 2,
+        });
+        const img = canvas.toDataURL("image/png");
+        const imgW = pageWidth - 80;
+        const imgH = (canvas.height * imgW) / canvas.width;
+        doc.addImage(img, "PNG", 40, 90, imgW, Math.min(imgH, 260));
+      }
+
+      autoTable(doc, {
+        startY: 380,
+        head: [["Station", "Inspections (days)", "Total uploads", "Clean %", "Need Attention %", "Avg score"]],
+        body: data.station_breakdown.map((s) => [
+          s.station_name,
+          s.inspection_days,
+          s.total,
+          `${s.clean_pct}%`,
+          `${s.need_attention_pct}%`,
+          s.avg_score,
+        ]),
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: { fillColor: [30, 58, 138], textColor: 255 },
+        alternateRowStyles: { fillColor: [241, 245, 249] },
+      });
+
+      doc.save(`my-clean-station_report_${from}_${to}.pdf`);
+      toast.success("PDF downloaded");
+    } catch (e) {
+      console.error(e);
+      toast.error("PDF export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6" data-testid="reports-page">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-[0.22em] text-blue-400 mb-2">
-            Performance reports
-          </div>
-          <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">
-            Station performance
-          </h1>
+          <div className="text-xs uppercase tracking-[0.22em] text-blue-400 mb-2">Performance reports</div>
+          <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">Station performance</h1>
         </div>
-        <Button
-          onClick={exportCsv}
-          variant="outline"
-          className="border-slate-700 text-slate-200 hover:bg-slate-800"
-          data-testid="export-csv-btn"
-        >
-          <Download className="w-4 h-4 mr-1.5" /> Export CSV
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={exportCsv}
+            variant="outline"
+            className="border-slate-700 text-slate-200 hover:bg-slate-800"
+            data-testid="export-csv-btn"
+          >
+            <Download className="w-4 h-4 mr-1.5" /> Export CSV
+          </Button>
+          <Button
+            onClick={exportPdf}
+            disabled={exporting}
+            className="bg-blue-500 hover:bg-blue-400 text-white"
+            data-testid="export-pdf-btn"
+          >
+            <FileDown className="w-4 h-4 mr-1.5" /> {exporting ? "Preparing…" : "Download Report (PDF)"}
+          </Button>
+        </div>
       </div>
 
       <div className="surface rounded-xl p-4 md:p-5">
@@ -125,25 +218,13 @@ export default function Reports() {
           <div>
             <Label className="text-xs text-slate-400">From</Label>
             <div className="mt-1">
-              <DatePicker
-                value={from}
-                onChange={setFrom}
-                placeholder="From date"
-                testid="reports-date-from"
-                max={new Date().toISOString().slice(0, 10)}
-              />
+              <DatePicker value={from} onChange={setFrom} testid="reports-date-from" max={new Date().toISOString().slice(0, 10)} />
             </div>
           </div>
           <div>
             <Label className="text-xs text-slate-400">To</Label>
             <div className="mt-1">
-              <DatePicker
-                value={to}
-                onChange={setTo}
-                placeholder="To date"
-                testid="reports-date-to"
-                max={new Date().toISOString().slice(0, 10)}
-              />
+              <DatePicker value={to} onChange={setTo} testid="reports-date-to" max={new Date().toISOString().slice(0, 10)} />
             </div>
           </div>
         </div>
@@ -154,28 +235,23 @@ export default function Reports() {
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-testid="reports-stats">
-            <KPI label="Inspections" value={data.total_inspections} />
+            <KPI label="Uploads" value={data.total_inspections} />
             <KPI label="Photos" value={data.total_photos} />
             <KPI label="Clean" value={data.rating_counts.Clean} tint="emerald" />
-            <KPI label="Unclean" value={data.rating_counts.Unclean} tint="red" />
+            <KPI label="Need Attention" value={data.rating_counts["Need Attention"] || 0} tint="red" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Everything inside chartsRef is included in the PDF snapshot */}
+          <div ref={chartsRef} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="surface rounded-xl p-5">
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-4">
-                Photos uploaded per day
-              </div>
+              <div className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-4">Photos uploaded per day</div>
               <div className="h-64">
                 <ResponsiveContainer>
                   <LineChart data={data.daily_uploads}>
                     <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" />
-                    <XAxis dataKey="date" stroke="#FFFFFF" tick={{ fill: "#FFFFFF", fontSize: 11 }} />
-                    <YAxis stroke="#FFFFFF" tick={{ fill: "#FFFFFF", fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" }}
-                      labelStyle={{ color: "#FFFFFF" }}
-                      itemStyle={{ color: "#FFFFFF" }}
-                    />
+                    <XAxis dataKey="date" stroke="#FFFFFF" tick={AXIS_TICK} />
+                    <YAxis stroke="#FFFFFF" tick={AXIS_TICK} />
+                    <Tooltip {...TOOLTIP_STYLE} />
                     <Line type="monotone" dataKey="photos" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -183,18 +259,29 @@ export default function Reports() {
             </div>
             <div className="surface rounded-xl p-5">
               <div className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-4">
-                Station average scores
+                Station average scores — all {data.station_breakdown.length} stations
               </div>
-              <div className="h-64">
-                <ResponsiveContainer>
-                  <BarChart data={data.station_breakdown}>
-                    <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="station_name" stroke="#FFFFFF" tick={{ fill: "#FFFFFF", fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
-                    <YAxis stroke="#FFFFFF" tick={{ fill: "#FFFFFF", fontSize: 11 }} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ background: "#0B1120", border: "1px solid #1E293B", color: "#FFFFFF" }} labelStyle={{ color: "#FFFFFF" }} itemStyle={{ color: "#FFFFFF" }} />
-                    <Bar dataKey="avg_score" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              {/* Give each station enough horizontal breathing room so all 45 labels are legible. */}
+              <div className="overflow-x-auto">
+                <div style={{ minWidth: Math.max(600, data.station_breakdown.length * 60), height: 280 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={data.station_breakdown}>
+                      <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="station_name"
+                        stroke="#FFFFFF"
+                        tick={AXIS_TICK_SM}
+                        interval={0}
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                      />
+                      <YAxis stroke="#FFFFFF" tick={AXIS_TICK} domain={[0, 100]} />
+                      <Tooltip {...TOOLTIP_STYLE} />
+                      <Bar dataKey="avg_score" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           </div>
@@ -208,10 +295,10 @@ export default function Reports() {
                 <thead className="text-left text-slate-400 text-xs uppercase tracking-[0.12em]">
                   <tr>
                     <th className="px-5 py-3">Station</th>
-                    <th className="px-5 py-3 text-right">Inspections</th>
-                    <th className="px-5 py-3 text-right">Clean</th>
-                    <th className="px-5 py-3 text-right">Needs Att.</th>
-                    <th className="px-5 py-3 text-right">Unclean</th>
+                    <th className="px-5 py-3 text-right">Inspections (days)</th>
+                    <th className="px-5 py-3 text-right">Total uploads</th>
+                    <th className="px-5 py-3 text-right">Clean %</th>
+                    <th className="px-5 py-3 text-right">Need Attention %</th>
                     <th className="px-5 py-3 text-right">Avg score</th>
                   </tr>
                 </thead>
@@ -219,10 +306,10 @@ export default function Reports() {
                   {data.station_breakdown.map((s) => (
                     <tr key={s.station_name} className="hover:bg-slate-800/40">
                       <td className="px-5 py-3 text-slate-100">{s.station_name}</td>
+                      <td className="px-5 py-3 text-right font-mono">{s.inspection_days}</td>
                       <td className="px-5 py-3 text-right font-mono">{s.total}</td>
-                      <td className="px-5 py-3 text-right font-mono text-emerald-400">{s.clean}</td>
-                      <td className="px-5 py-3 text-right font-mono text-amber-400">{s.needs_attention}</td>
-                      <td className="px-5 py-3 text-right font-mono text-red-400">{s.unclean}</td>
+                      <td className="px-5 py-3 text-right font-mono text-emerald-400">{s.clean_pct}%</td>
+                      <td className="px-5 py-3 text-right font-mono text-amber-400">{s.need_attention_pct}%</td>
                       <td className="px-5 py-3 text-right font-mono text-slate-100">{s.avg_score}</td>
                     </tr>
                   ))}
@@ -234,7 +321,7 @@ export default function Reports() {
           {data.unclean_details.length > 0 && (
             <div className="surface rounded-xl overflow-hidden">
               <div className="px-5 py-3 border-b border-slate-800 text-xs uppercase tracking-[0.18em] text-slate-400 flex items-center gap-2">
-                <AlertTriangle className="w-3.5 h-3.5 text-red-400" /> Unclean stations — problems
+                <AlertTriangle className="w-3.5 h-3.5 text-red-400" /> Stations needing attention
               </div>
               <div className="divide-y divide-slate-800">
                 {data.unclean_details.map((u) => (
@@ -279,9 +366,7 @@ function KPI({ label, value, tint }) {
   return (
     <div className="surface rounded-xl p-5">
       <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</div>
-      <div className={`font-display text-3xl font-bold mt-1 ${tints[tint] || "text-slate-100"}`}>
-        {value}
-      </div>
+      <div className={`font-display text-3xl font-bold mt-1 ${tints[tint] || "text-slate-100"}`}>{value}</div>
     </div>
   );
 }

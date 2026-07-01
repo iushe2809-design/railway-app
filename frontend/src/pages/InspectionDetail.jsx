@@ -201,7 +201,7 @@ function PhotoCard({ photo, index, inspectionId, onOpenPhoto, onUpdated }) {
               </div>
               <div className="font-display text-lg sm:text-xl font-semibold mt-1 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-blue-400" />
-                AI Verdict
+                Inspection Result
               </div>
             </div>
             <div className="flex flex-col items-end gap-1">
@@ -350,12 +350,12 @@ function OverrideDialog({ inspectionId, photoId, onUpdated }) {
           className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
           data-testid={`override-btn-${photoId}`}
         >
-          <Gavel className="w-4 h-4 mr-1.5" /> Overrule verdict
+          <Gavel className="w-4 h-4 mr-1.5" /> Overrule result
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-[#0B1120] border-slate-800 text-slate-100">
         <DialogHeader>
-          <DialogTitle>Overrule AI verdict</DialogTitle>
+          <DialogTitle>Overrule Inspection Result</DialogTitle>
           <DialogDescription className="text-slate-400">
             Inspectors can override the AI rating. Provide your reasoning for the audit log.
           </DialogDescription>
@@ -369,8 +369,7 @@ function OverrideDialog({ inspectionId, photoId, onUpdated }) {
               </SelectTrigger>
               <SelectContent className="bg-[#0B1120] border-slate-800 text-slate-100">
                 <SelectItem value="Clean">Clean</SelectItem>
-                <SelectItem value="Needs Attention">Needs Attention</SelectItem>
-                <SelectItem value="Unclean">Unclean</SelectItem>
+                <SelectItem value="Need Attention">Need Attention</SelectItem>
               </SelectContent>
             </Select>
           </div>

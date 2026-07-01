@@ -10,6 +10,7 @@ import {
   Share2,
   LogOut,
   ClipboardList,
+  Sparkles,
 } from "lucide-react";
 
 export default function Layout() {
@@ -22,6 +23,7 @@ export default function Layout() {
         { to: "/admin", label: "Overview", icon: LayoutDashboard, end: true, id: "nav-overview" },
         { to: "/admin/inspections", label: "Stations Upload", icon: ClipboardList, id: "nav-inspections" },
         { to: "/admin/reports", label: "Reports", icon: FileBarChart2, id: "nav-reports" },
+        { to: "/admin/analytics", label: "Analytics", icon: Sparkles, id: "nav-analytics" },
         { to: "/admin/users", label: "Users", icon: Users, id: "nav-users" },
         { to: "/admin/share-links", label: "Share Links", icon: Share2, id: "nav-share-links" },
       ]

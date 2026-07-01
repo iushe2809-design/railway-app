@@ -49,7 +49,7 @@ ONLY flag real CLEANLINESS issues:
 
 You MUST respond with ONLY valid JSON (no markdown, no explanation) in this exact schema:
 {
-  "rating": "Clean" | "Needs Attention" | "Unclean",
+  "rating": "Clean" | "Need Attention",
   "score": <integer 0-100>,
   "area_detected": "<short label e.g. Platform, Waiting Area, Toilet, Tracks, Stairs, Concourse>",
   "area_breakdown": [
@@ -62,12 +62,11 @@ You MUST respond with ONLY valid JSON (no markdown, no explanation) in this exac
   "recommendations": ["<actionable recommendation 1>", "<actionable recommendation 2>"]
 }
 
-Scoring guide:
-- 85-100 => Clean
-- 60-84  => Needs Attention
-- 0-59   => Unclean
+Scoring guide (STRICT 2-tier):
+- 80-100 => Clean
+- 0-79   => Need Attention
 
-If there are no actual cleanliness issues (only people/luggage/normal activity), the station is CLEAN. Return an empty issues array and score 90+.
+If there are no actual cleanliness issues (only people/luggage/normal activity), the station is CLEAN. Return an empty issues array and score 85+.
 """
 
 
@@ -180,12 +179,8 @@ async def analyze_image(
             "_raw": text[:1000],
         }
 
+    # Normalize (2-tier threshold): >=80 Clean; <80 Need Attention
     score = int(result.get("score", 0))
-    if score >= 85:
-        result["rating"] = "Clean"
-    elif score >= 60:
-        result["rating"] = "Needs Attention"
-    else:
-        result["rating"] = "Unclean"
+    result["rating"] = "Clean" if score >= 80 else "Need Attention"
 
     return result

@@ -121,7 +121,7 @@ def public_user(user: dict) -> dict:
 
 async def aggregate_inspection(photos: List[dict]) -> tuple[int, str]:
     if not photos:
-        return 0, "Unclean"
+        return 0, "Need Attention"
     # Use effective score (override overrides AI)
     scores = []
     for p in photos:
@@ -130,12 +130,7 @@ async def aggregate_inspection(photos: List[dict]) -> tuple[int, str]:
         else:
             scores.append(p["ai_analysis"].get("score", 0))
     avg = int(sum(scores) / len(scores))
-    if avg >= 85:
-        rating = "Clean"
-    elif avg >= 60:
-        rating = "Needs Attention"
-    else:
-        rating = "Unclean"
+    rating = "Clean" if avg >= 80 else "Need Attention"
     return avg, rating
 
 
@@ -608,7 +603,7 @@ async def override_photo(
     user: Annotated[dict, Depends(require_user)],
 ):
     require_admin(user)
-    rating_map = {"Clean": 95, "Needs Attention": 72, "Unclean": 40}
+    rating_map = {"Clean": 90, "Need Attention": 60}
     if payload.new_rating not in rating_map:
         raise HTTPException(status_code=400, detail="Invalid rating")
     doc = await db.inspections.find_one({"id": inspection_id, "is_deleted": False})
@@ -687,41 +682,50 @@ async def reports_summary(
         query["inspection_date"] = rng
     if station_name:
         query["station_name"] = station_name
-    docs = await db.inspections.find(query, {"_id": 0}).to_list(2000)
+    docs = await db.inspections.find(query, {"_id": 0}).to_list(4000)
+
+    def _is_clean(rating: str, score: int) -> bool:
+        # Global 2-tier rule: score >= 80 → Clean. Rating field is authoritative
+        # when new; legacy "Unclean" is folded into Need Attention automatically.
+        if rating == "Clean":
+            return True
+        return score >= 80
 
     total_inspections = len(docs)
     total_photos = sum(len(d["photos"]) for d in docs)
-    counts = {"Clean": 0, "Needs Attention": 0, "Unclean": 0}
+    counts = {"Clean": 0, "Need Attention": 0}
     by_station: dict = {}
     by_day: dict = {}
     unclean_details = []
     for d in docs:
-        rating = d.get("aggregate_rating", "Unclean")
-        counts[rating] = counts.get(rating, 0) + 1
+        rating = d.get("aggregate_rating", "Need Attention")
+        score = int(d.get("aggregate_score", 0))
+        is_clean = _is_clean(rating, score)
+        counts["Clean" if is_clean else "Need Attention"] += 1
         sname = d.get("station_name", "Unknown")
         if sname not in by_station:
             by_station[sname] = {
                 "station_name": sname,
                 "total": 0,
                 "clean": 0,
-                "needs_attention": 0,
-                "unclean": 0,
+                "need_attention": 0,
                 "avg_score": 0,
                 "_scores": [],
+                "_days": set(),
             }
-        by_station[sname]["total"] += 1
-        if rating == "Clean":
-            by_station[sname]["clean"] += 1
-        elif rating == "Needs Attention":
-            by_station[sname]["needs_attention"] += 1
+        bs = by_station[sname]
+        bs["total"] += 1
+        if is_clean:
+            bs["clean"] += 1
         else:
-            by_station[sname]["unclean"] += 1
-        by_station[sname]["_scores"].append(d.get("aggregate_score", 0))
+            bs["need_attention"] += 1
+        bs["_scores"].append(score)
+        bs["_days"].add(d.get("inspection_date") or d["created_at"][:10])
 
         day = d.get("inspection_date") or d["created_at"][:10]
         by_day[day] = by_day.get(day, 0) + len(d["photos"])
 
-        if rating == "Unclean":
+        if not is_clean:
             issues = []
             for p in d["photos"]:
                 ai = p.get("ai_analysis", {})
@@ -730,7 +734,7 @@ async def reports_summary(
                 {
                     "inspection_id": d["id"],
                     "station_name": sname,
-                    "score": d.get("aggregate_score", 0),
+                    "score": score,
                     "inspection_date": d.get("inspection_date") or d["created_at"][:10],
                     "created_at": d["created_at"],
                     "issues": issues[:8],
@@ -740,7 +744,12 @@ async def reports_summary(
     station_breakdown = []
     for s in by_station.values():
         scores = s.pop("_scores")
+        days = s.pop("_days")
+        total = s["total"] or 1
         s["avg_score"] = int(sum(scores) / len(scores)) if scores else 0
+        s["inspection_days"] = len(days)
+        s["clean_pct"] = round((s["clean"] / total) * 100, 1)
+        s["need_attention_pct"] = round((s["need_attention"] / total) * 100, 1)
         station_breakdown.append(s)
     station_breakdown.sort(key=lambda x: x["avg_score"])
 
@@ -753,6 +762,95 @@ async def reports_summary(
         "station_breakdown": station_breakdown,
         "daily_uploads": daily_uploads,
         "unclean_details": unclean_details,
+    }
+
+
+@api_router.get("/reports/leaderboard")
+async def reports_leaderboard(
+    user: Annotated[dict, Depends(require_user)],
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """Ranked station performance for the Dashboard best/worst callouts.
+
+    Returns:
+      - `overall`: all-time ranking (ignores date filter). Used for the live
+        Best/Worst callouts.
+      - `average`: within [date_from,date_to], per-station AVERAGE clean_pct
+        across all uploads in the window, ranked desc.
+      - `most_recent`: within the same window, per-station clean_pct of the
+        SINGLE most recent upload, ranked desc.
+    """
+    require_admin(user)
+
+    def _is_clean(doc):
+        if doc.get("aggregate_rating") == "Clean":
+            return True
+        return int(doc.get("aggregate_score", 0)) >= 80
+
+    async def _rank(query: dict) -> list:
+        docs = await db.inspections.find(query, {"_id": 0}).to_list(4000)
+        by_station: dict = {}
+        for d in docs:
+            sname = d.get("station_name", "Unknown")
+            entry = by_station.setdefault(
+                sname,
+                {"station_name": sname, "total": 0, "clean": 0, "avg_score": 0, "_scores": []},
+            )
+            entry["total"] += 1
+            if _is_clean(d):
+                entry["clean"] += 1
+            entry["_scores"].append(int(d.get("aggregate_score", 0)))
+        out = []
+        for e in by_station.values():
+            scores = e.pop("_scores")
+            total = e["total"] or 1
+            e["clean_pct"] = round((e["clean"] / total) * 100, 1)
+            e["avg_score"] = int(sum(scores) / len(scores)) if scores else 0
+            out.append(e)
+        out.sort(key=lambda x: (-x["clean_pct"], -x["avg_score"]))
+        return out
+
+    # Overall (all time, no date filter)
+    overall = await _rank({"is_deleted": False})
+
+    # Windowed (average across window)
+    win_q: dict = {"is_deleted": False}
+    if date_from or date_to:
+        rng: dict = {}
+        if date_from:
+            rng["$gte"] = date_from
+        if date_to:
+            rng["$lte"] = date_to
+        win_q["inspection_date"] = rng
+    average = await _rank(win_q)
+
+    # Most-recent upload per station within window
+    docs = (
+        await db.inspections.find(win_q, {"_id": 0})
+        .sort("created_at", -1)
+        .to_list(4000)
+    )
+    seen: dict = {}
+    for d in docs:
+        sname = d.get("station_name", "Unknown")
+        if sname in seen:
+            continue
+        clean_pct = 100.0 if _is_clean(d) else 0.0
+        seen[sname] = {
+            "station_name": sname,
+            "clean_pct": clean_pct,
+            "score": int(d.get("aggregate_score", 0)),
+            "inspection_date": d.get("inspection_date"),
+            "created_at": d.get("created_at"),
+            "rating": "Clean" if _is_clean(d) else "Need Attention",
+        }
+    most_recent = sorted(seen.values(), key=lambda x: (-x["clean_pct"], -x["score"]))
+
+    return {
+        "overall": overall,
+        "average": average,
+        "most_recent": most_recent,
     }
 
 

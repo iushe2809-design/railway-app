@@ -13,6 +13,7 @@ import UserManagement from "@/pages/UserManagement";
 import StationManagement from "@/pages/StationManagement";
 import ShareLinks from "@/pages/ShareLinks";
 import PublicUpload from "@/pages/PublicUpload";
+import Analytics from "@/pages/Analytics";
 import Layout from "@/components/Layout";
 
 function Protected({ children, role }) {
@@ -71,6 +72,7 @@ function App() {
             <Route path="/admin/inspections" element={<Protected role="admin"><AdminInspections /></Protected>} />
             <Route path="/admin/inspections/:id" element={<Protected role="admin"><InspectionDetail /></Protected>} />
             <Route path="/admin/reports" element={<Protected role="admin"><Reports /></Protected>} />
+            <Route path="/admin/analytics" element={<Protected role="admin"><Analytics /></Protected>} />
             <Route path="/admin/users" element={<Protected role="admin"><UserManagement /></Protected>} />
             <Route path="/admin/stations" element={<Protected role="admin"><StationManagement /></Protected>} />
             <Route path="/admin/share-links" element={<Protected role="admin"><ShareLinks /></Protected>} />

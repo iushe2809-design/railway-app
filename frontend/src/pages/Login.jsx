@@ -145,11 +145,6 @@ export default function Login() {
               {loading ? "Signing in…" : "Sign in"}
             </Button>
           </form>
-          <div className="mt-8 surface rounded-md p-4 text-xs text-slate-400">
-            <div className="uppercase tracking-[0.2em] text-slate-500 mb-2">Demo credentials</div>
-            <div>Admin: <span className="text-slate-200 font-mono">admin / Admin@123</span></div>
-            <div>SM: <span className="text-slate-200 font-mono">sm001 … sm045 / Station@123</span></div>
-          </div>
         </div>
       </div>
     </div>
