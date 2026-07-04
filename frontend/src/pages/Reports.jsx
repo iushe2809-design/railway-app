@@ -19,10 +19,12 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  LineChart,
-  Line,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
-import { Filter, Download, AlertTriangle, FileDown } from "lucide-react";
+import { Filter, Download, AlertTriangle, FileDown, PieChart as PieIcon } from "lucide-react";
 import { toast } from "sonner";
 
 const AXIS_TICK = { fill: "#FFFFFF", fontSize: 11 };
@@ -51,7 +53,11 @@ export default function Reports() {
   const [stationName, setStationName] = useState("all");
   const [from, setFrom] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  // Pie chart has its own independent date range
+  const [pieFrom, setPieFrom] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
+  const [pieTo, setPieTo] = useState(new Date().toISOString().slice(0, 10));
   const [data, setData] = useState(null);
+  const [pieData, setPieData] = useState(null);
   const [exporting, setExporting] = useState(false);
   const chartsRef = useRef(null);
 
@@ -68,17 +74,29 @@ export default function Reports() {
     setData(res.data);
   };
 
+  const loadPie = async () => {
+    const params = new URLSearchParams();
+    if (pieFrom) params.set("date_from", pieFrom);
+    if (pieTo) params.set("date_to", pieTo);
+    const res = await api.get(`/reports/summary?${params.toString()}`);
+    setPieData(res.data);
+  };
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stationName, from, to]);
+
+  useEffect(() => {
+    loadPie();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pieFrom, pieTo]);
 
   const exportCsv = () => {
     if (!data || data.station_breakdown.length === 0) return;
     const rows = data.station_breakdown.map((s) => ({
       station: s.station_name,
       inspections_days: s.inspection_days,
-      total_uploads: s.total,
       clean_pct: s.clean_pct,
       need_attention_pct: s.need_attention_pct,
       avg_score: s.avg_score,
@@ -140,11 +158,10 @@ export default function Reports() {
 
       autoTable(doc, {
         startY: 380,
-        head: [["Station", "Inspections (days)", "Total uploads", "Clean %", "Need Attention %", "Avg score"]],
+        head: [["Station", "Inspections (days)", "Clean %", "Need Attention %", "Avg score"]],
         body: data.station_breakdown.map((s) => [
           s.station_name,
           s.inspection_days,
-          s.total,
           `${s.clean_pct}%`,
           `${s.need_attention_pct}%`,
           s.avg_score,
@@ -234,48 +251,30 @@ export default function Reports() {
         <div className="text-slate-400">Loading…</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-testid="reports-stats">
-            <KPI label="Uploads" value={data.total_inspections} />
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4" data-testid="reports-stats">
             <KPI label="Photos" value={data.total_photos} />
             <KPI label="Clean" value={data.rating_counts.Clean} tint="emerald" />
             <KPI label="Need Attention" value={data.rating_counts["Need Attention"] || 0} tint="red" />
           </div>
 
-          {/* Everything inside chartsRef is included in the PDF snapshot */}
           <div ref={chartsRef} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="surface rounded-xl p-5">
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-4">Photos uploaded per day</div>
-              <div className="h-64">
-                <ResponsiveContainer>
-                  <LineChart data={data.daily_uploads}>
-                    <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" />
-                    <XAxis dataKey="date" stroke="#FFFFFF" tick={AXIS_TICK} />
-                    <YAxis stroke="#FFFFFF" tick={AXIS_TICK} />
-                    <Tooltip {...TOOLTIP_STYLE} />
-                    <Line type="monotone" dataKey="photos" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <PieChartCard
+              pieData={pieData}
+              pieFrom={pieFrom}
+              pieTo={pieTo}
+              setPieFrom={setPieFrom}
+              setPieTo={setPieTo}
+            />
             <div className="surface rounded-xl p-5">
               <div className="text-xs uppercase tracking-[0.18em] text-slate-400 mb-4">
                 Station average scores — all {data.station_breakdown.length} stations
               </div>
-              {/* Give each station enough horizontal breathing room so all 45 labels are legible. */}
               <div className="overflow-x-auto">
                 <div style={{ minWidth: Math.max(600, data.station_breakdown.length * 60), height: 280 }}>
                   <ResponsiveContainer>
                     <BarChart data={data.station_breakdown}>
                       <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="station_name"
-                        stroke="#FFFFFF"
-                        tick={AXIS_TICK_SM}
-                        interval={0}
-                        angle={-45}
-                        textAnchor="end"
-                        height={80}
-                      />
+                      <XAxis dataKey="station_name" stroke="#FFFFFF" tick={AXIS_TICK_SM} interval={0} angle={-45} textAnchor="end" height={80} />
                       <YAxis stroke="#FFFFFF" tick={AXIS_TICK} domain={[0, 100]} />
                       <Tooltip {...TOOLTIP_STYLE} />
                       <Bar dataKey="avg_score" fill="#3B82F6" radius={[4, 4, 0, 0]} />
@@ -296,7 +295,6 @@ export default function Reports() {
                   <tr>
                     <th className="px-5 py-3">Station</th>
                     <th className="px-5 py-3 text-right">Inspections (days)</th>
-                    <th className="px-5 py-3 text-right">Total uploads</th>
                     <th className="px-5 py-3 text-right">Clean %</th>
                     <th className="px-5 py-3 text-right">Need Attention %</th>
                     <th className="px-5 py-3 text-right">Avg score</th>
@@ -307,7 +305,6 @@ export default function Reports() {
                     <tr key={s.station_name} className="hover:bg-slate-800/40">
                       <td className="px-5 py-3 text-slate-100">{s.station_name}</td>
                       <td className="px-5 py-3 text-right font-mono">{s.inspection_days}</td>
-                      <td className="px-5 py-3 text-right font-mono">{s.total}</td>
                       <td className="px-5 py-3 text-right font-mono text-emerald-400">{s.clean_pct}%</td>
                       <td className="px-5 py-3 text-right font-mono text-amber-400">{s.need_attention_pct}%</td>
                       <td className="px-5 py-3 text-right font-mono text-slate-100">{s.avg_score}</td>
@@ -367,6 +364,64 @@ function KPI({ label, value, tint }) {
     <div className="surface rounded-xl p-5">
       <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</div>
       <div className={`font-display text-3xl font-bold mt-1 ${tints[tint] || "text-slate-100"}`}>{value}</div>
+    </div>
+  );
+}
+
+const PIE_COLORS = { Clean: "#10B981", "Need Attention": "#F59E0B" };
+
+function PieChartCard({ pieData, pieFrom, pieTo, setPieFrom, setPieTo }) {
+  const counts = pieData?.rating_counts || { Clean: 0, "Need Attention": 0 };
+  const total = (counts.Clean || 0) + (counts["Need Attention"] || 0);
+  const rows = [
+    { name: "Clean", value: counts.Clean || 0 },
+    { name: "Need Attention", value: counts["Need Attention"] || 0 },
+  ];
+  const cleanPct = total ? Math.round(((counts.Clean || 0) / total) * 1000) / 10 : 0;
+  const naPct = total ? Math.round(((counts["Need Attention"] || 0) / total) * 1000) / 10 : 0;
+
+  return (
+    <div className="surface rounded-xl p-5" data-testid="reports-pie-chart">
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+        <div>
+          <div className="text-xs uppercase tracking-[0.18em] text-slate-400 flex items-center gap-1.5">
+            <PieIcon className="w-3.5 h-3.5" /> Clean vs Need Attention (%)
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">Independent date filter for this chart.</div>
+        </div>
+        <div className="flex gap-2">
+          <div>
+            <Label className="text-[10px] uppercase tracking-[0.15em] text-slate-500">From</Label>
+            <div className="mt-1"><DatePicker value={pieFrom} onChange={setPieFrom} testid="pie-date-from" max={new Date().toISOString().slice(0, 10)} /></div>
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-[0.15em] text-slate-500">To</Label>
+            <div className="mt-1"><DatePicker value={pieTo} onChange={setPieTo} testid="pie-date-to" max={new Date().toISOString().slice(0, 10)} /></div>
+          </div>
+        </div>
+      </div>
+      {total === 0 ? (
+        <div className="h-64 flex items-center justify-center text-slate-500 text-sm">No uploads in this range.</div>
+      ) : (
+        <div className="h-64">
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie data={rows} dataKey="value" innerRadius={55} outerRadius={95} paddingAngle={3}
+                label={({ name, value }) => `${name}: ${value}`}>
+                {rows.map((r) => (
+                  <Cell key={r.name} fill={PIE_COLORS[r.name]} stroke="none" />
+                ))}
+              </Pie>
+              <Tooltip {...TOOLTIP_STYLE} />
+              <Legend wrapperStyle={{ color: "#FFFFFF" }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <div className="flex gap-4 text-xs text-slate-300 mt-2">
+        <span><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5" />Clean: <span className="font-mono">{cleanPct}%</span></span>
+        <span><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />Need Attention: <span className="font-mono">{naPct}%</span></span>
+      </div>
     </div>
   );
 }

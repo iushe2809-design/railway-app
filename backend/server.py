@@ -70,6 +70,17 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ChangeCredentialsRequest(BaseModel):
+    new_username: Optional[str] = None
+    new_password: Optional[str] = None
+    current_password: str
+
+
+class GrievanceCreate(BaseModel):
+    station_name: str
+    message: str
+
+
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -151,6 +162,34 @@ async def login(req: LoginRequest):
 @api_router.get("/auth/me")
 async def me(user: Annotated[dict, Depends(require_user)]):
     return public_user(user)
+
+
+@api_router.post("/auth/change-credentials")
+async def change_credentials(
+    payload: ChangeCredentialsRequest,
+    user: Annotated[dict, Depends(require_user)],
+):
+    """Self-service username/password update. Requires current password."""
+    if not verify_password(payload.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    updates: dict = {}
+    if payload.new_username:
+        new_u = payload.new_username.lower().strip()
+        if not new_u or len(new_u) < 3:
+            raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+        if new_u != user["username"] and await db.users.find_one({"username": new_u}):
+            raise HTTPException(status_code=400, detail="Username already taken")
+        updates["username"] = new_u
+    if payload.new_password:
+        if len(payload.new_password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        updates["password_hash"] = hash_password(payload.new_password)
+    if not updates:
+        return {"ok": True, "changed": False}
+    await db.users.update_one({"id": user["id"]}, {"$set": updates})
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    token = create_token(fresh["id"], fresh["role"])
+    return {"ok": True, "changed": True, "token": token, "user": public_user(fresh)}
 
 
 # ============ Station Endpoints ============
@@ -659,6 +698,126 @@ async def delete_inspection(
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Inspection not found")
     return {"ok": True}
+
+
+# ============ Grievances ============
+
+
+@api_router.post("/grievances")
+async def create_grievance(
+    payload: GrievanceCreate, user: Annotated[dict, Depends(require_user)]
+):
+    if not payload.station_name.strip() or not payload.message.strip():
+        raise HTTPException(status_code=400, detail="Station and message required")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "station_name": payload.station_name.strip(),
+        "message": payload.message.strip(),
+        "submitted_by_id": user["id"],
+        "submitted_by_name": user["full_name"],
+        "submitted_by_username": user["username"],
+        "role": user["role"],
+        "created_at": now_iso(),
+        "is_deleted": False,
+        "resolved": False,
+    }
+    await db.grievances.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api_router.get("/grievances")
+async def list_grievances(
+    user: Annotated[dict, Depends(require_user)],
+    include_resolved: bool = True,
+):
+    query: dict = {"is_deleted": False}
+    if user["role"] == "sm":
+        query["submitted_by_id"] = user["id"]
+    if not include_resolved:
+        query["resolved"] = False
+    docs = (
+        await db.grievances.find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .to_list(500)
+    )
+    return docs
+
+
+@api_router.post("/grievances/{gid}/resolve")
+async def resolve_grievance(gid: str, user: Annotated[dict, Depends(require_user)]):
+    require_admin(user)
+    res = await db.grievances.update_one(
+        {"id": gid}, {"$set": {"resolved": True, "resolved_at": now_iso(), "resolved_by": user["id"]}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"ok": True}
+
+
+@api_router.delete("/grievances/{gid}")
+async def delete_grievance(gid: str, user: Annotated[dict, Depends(require_user)]):
+    require_admin(user)
+    res = await db.grievances.update_one(
+        {"id": gid}, {"$set": {"is_deleted": True}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"ok": True}
+
+
+# ============ Today's uploads drill-down ============
+
+
+@api_router.get("/reports/day-detail")
+async def day_detail(
+    user: Annotated[dict, Depends(require_user)],
+    date: Optional[str] = None,
+):
+    """Per-station and per-SM upload counts for a single date (default = today).
+
+    Response:
+      {
+        "date": "YYYY-MM-DD",
+        "stations": [{"station_name": "RNC", "photos": 3, "inspections": 1}],
+        "uploaders": [{"submitted_by_name": "SM RNC", "username": "sm001",
+                       "station_name": "RNC", "photos": 3, "inspections": 1}],
+        "stations_count": <int>,
+        "photos_count": <int>,
+      }
+    """
+    require_admin(user)
+    d = date or datetime.now(timezone.utc).date().isoformat()
+    docs = await db.inspections.find(
+        {"is_deleted": False, "inspection_date": d}, {"_id": 0}
+    ).to_list(4000)
+    by_station: dict = {}
+    by_uploader: dict = {}
+    for doc in docs:
+        sname = doc.get("station_name", "Unknown")
+        st = by_station.setdefault(sname, {"station_name": sname, "photos": 0, "inspections": 0})
+        st["photos"] += len(doc["photos"])
+        st["inspections"] += 1
+        uname = doc.get("uploaded_by_name") or "Anonymous"
+        uid = doc.get("uploaded_by_id") or f"public-{sname}"
+        up = by_uploader.setdefault(
+            uid,
+            {
+                "submitted_by_name": uname,
+                "username": None,
+                "station_name": sname,
+                "photos": 0,
+                "inspections": 0,
+            },
+        )
+        up["photos"] += len(doc["photos"])
+        up["inspections"] += 1
+    return {
+        "date": d,
+        "stations": sorted(by_station.values(), key=lambda x: -x["photos"]),
+        "uploaders": sorted(by_uploader.values(), key=lambda x: -x["photos"]),
+        "stations_count": len(by_station),
+        "photos_count": sum(len(d["photos"]) for d in docs),
+    }
 
 
 # ============ Reports ============

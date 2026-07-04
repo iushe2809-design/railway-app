@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api, { fileUrl } from "@/lib/api";
 import StatusBadge from "@/components/StatusBadge";
 import DatePicker from "@/components/DatePicker";
+import DownloadPdfButton from "@/components/DownloadPdfButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,17 +37,20 @@ export default function AdminInspections() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [search, setSearch] = useState("");
+  const contentRef = useRef(null);
+  const hasDateRange = Boolean(from && to);
 
   useEffect(() => {
     api.get("/inspections/station-names").then((r) => setStationNames(r.data));
   }, []);
 
   const load = async () => {
+    if (!hasDateRange) { setItems([]); return; }
     const params = new URLSearchParams();
     if (stationName !== "all") params.set("station_name", stationName);
     if (rating !== "all") params.set("rating", rating);
-    if (from) params.set("date_from", from);
-    if (to) params.set("date_to", to);
+    params.set("date_from", from);
+    params.set("date_to", to);
     const res = await api.get(`/inspections?${params.toString()}`);
     setItems(res.data);
   };
@@ -68,14 +72,23 @@ export default function AdminInspections() {
 
   return (
     <div className="space-y-6" data-testid="admin-inspections-page">
-      <div>
-        <div className="text-xs uppercase tracking-[0.22em] text-blue-400 mb-2">Audit log</div>
-        <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">
-          Stations Upload
-        </h1>
-        <p className="text-slate-400 mt-2 text-sm">
-          Filter by date and station name (as entered by Station Masters).
-        </p>
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-[0.22em] text-blue-400 mb-2">Audit log</div>
+          <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">Stations Upload</h1>
+          <p className="text-slate-400 mt-2 text-sm">
+            Filter by date and station name (as entered by Station Masters).
+          </p>
+        </div>
+        {hasDateRange && (
+          <DownloadPdfButton
+            contentRef={contentRef}
+            filename={`stations_upload_${from}_${to}`}
+            title="My Clean Station — Stations Upload"
+            subtitle={`Range: ${from} to ${to}${stationName !== "all" ? ` · Station: ${stationName}` : ""}`}
+            testid="stations-upload-download-pdf"
+          />
+        )}
       </div>
 
       <div className="surface rounded-xl p-4 md:p-5">
@@ -175,12 +188,18 @@ export default function AdminInspections() {
         )}
       </div>
 
-      <div className="surface rounded-xl overflow-hidden">
+      <div className="surface rounded-xl overflow-hidden" ref={contentRef}>
         <div className="px-5 py-3 border-b border-slate-800 text-xs uppercase tracking-[0.18em] text-slate-400 flex items-center justify-between">
           <div>Results</div>
           <div data-testid="results-count">{filtered.length} inspection{filtered.length === 1 ? "" : "s"}</div>
         </div>
-        {filtered.length === 0 ? (
+        {!hasDateRange ? (
+          <div className="px-5 py-14 text-center text-slate-400" data-testid="date-range-required-msg">
+            <Filter className="w-8 h-8 mx-auto mb-3 opacity-40" />
+            <div className="text-slate-100 font-medium">Select a date range to see results</div>
+            <div className="text-xs text-slate-500 mt-1">Pick a &quot;From&quot; and &quot;To&quot; date above to load uploads.</div>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="px-5 py-14 text-center text-slate-500 text-sm">No matching inspections.</div>
         ) : (
           <div className="divide-y divide-slate-800">

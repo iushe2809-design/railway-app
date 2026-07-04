@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { getUser, clearSession } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import AccountMenu from "@/components/AccountMenu";
 import {
   LayoutDashboard,
   Camera,
@@ -10,7 +11,7 @@ import {
   Share2,
   LogOut,
   ClipboardList,
-  Sparkles,
+  MessageSquareWarning,
 } from "lucide-react";
 
 export default function Layout() {
@@ -23,7 +24,7 @@ export default function Layout() {
         { to: "/admin", label: "Overview", icon: LayoutDashboard, end: true, id: "nav-overview" },
         { to: "/admin/inspections", label: "Stations Upload", icon: ClipboardList, id: "nav-inspections" },
         { to: "/admin/reports", label: "Reports", icon: FileBarChart2, id: "nav-reports" },
-        { to: "/admin/analytics", label: "Analytics", icon: Sparkles, id: "nav-analytics" },
+        { to: "/admin/grievances", label: "Grievances", icon: MessageSquareWarning, id: "nav-grievances" },
         { to: "/admin/users", label: "Users", icon: Users, id: "nav-users" },
         { to: "/admin/share-links", label: "Share Links", icon: Share2, id: "nav-share-links" },
       ]
@@ -54,7 +55,7 @@ export default function Layout() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="hidden md:flex flex-col items-end leading-tight">
               <div className="text-sm text-slate-200" data-testid="header-user-name">{user?.full_name}</div>
               <div className="text-[11px] uppercase tracking-[0.15em] text-slate-500">
@@ -65,6 +66,7 @@ export default function Layout() {
                     : "Station Master"}
               </div>
             </div>
+            <AccountMenu />
             <Button
               variant="ghost"
               size="sm"
