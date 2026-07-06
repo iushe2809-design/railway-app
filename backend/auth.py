@@ -70,3 +70,10 @@ def require_admin(user: dict):
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
+
+
+def require_staff(user: dict):
+    """Admin (edit) OR viewer (read-only) can access read endpoints."""
+    if user.get("role") not in ("admin", "viewer"):
+        raise HTTPException(status_code=403, detail="Staff access required")
+    return user

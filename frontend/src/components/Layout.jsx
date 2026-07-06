@@ -17,7 +17,7 @@ import {
 export default function Layout() {
   const user = getUser();
   const navigate = useNavigate();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "viewer";
 
   const links = isAdmin
     ? [
@@ -61,9 +61,11 @@ export default function Layout() {
               <div className="text-[11px] uppercase tracking-[0.15em] text-slate-500">
                 {user?.role === "admin"
                   ? "Super Admin"
-                  : user?.station_name
-                    ? `Station ${user.station_name}`
-                    : "Station Master"}
+                  : user?.role === "viewer"
+                    ? "Read-only Viewer"
+                    : user?.station_name
+                      ? `Station ${user.station_name}`
+                      : "Station Master"}
               </div>
             </div>
             <AccountMenu />

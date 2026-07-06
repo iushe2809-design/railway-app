@@ -35,6 +35,7 @@ from auth import (  # noqa: E402
     hash_password,
     require_admin,
     require_auth_factory,
+    require_staff,
     verify_password,
 )
 from ai_service import analyze_image, normalize_image  # noqa: E402
@@ -148,13 +149,44 @@ async def aggregate_inspection(photos: List[dict]) -> tuple[int, str]:
 # ============ Auth Endpoints ============
 
 
+import re as _re_login
+
+
 @api_router.post("/auth/login")
 async def login(req: LoginRequest):
-    user = await db.users.find_one({"username": req.username.lower().strip()}, {"_id": 0})
+    username = req.username.lower().strip()
+    password = req.password
+
+    # SM auto-provision: usernames matching sm\d+ with Station@123 create the
+    # account on-the-fly (station_name is set on first upload).
+    is_sm_pattern = bool(_re_login.match(r"^sm\d{1,5}$", username))
+    if is_sm_pattern and password == "Station@123":
+        existing = await db.users.find_one({"username": username}, {"_id": 0})
+        if not existing:
+            await db.users.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "username": username,
+                    "password_hash": hash_password("Station@123"),
+                    "full_name": f"SM {username.upper()}",
+                    "role": "sm",
+                    "station_id": None,
+                    "station_name": None,  # will be set on first upload
+                    "active": True,
+                    "created_at": now_iso(),
+                }
+            )
+            logger.info(f"Auto-created SM account: {username}")
+
+    user = await db.users.find_one({"username": username}, {"_id": 0})
     if not user or not user.get("active", True):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not verify_password(req.password, user["password_hash"]):
+    if not verify_password(password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    # SM usernames MUST NOT be able to log in with Admin@123.
+    if username.startswith("sm") and password == "Admin@123":
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
     token = create_token(user["id"], user["role"])
     return {"token": token, "user": public_user(user)}
 
@@ -235,7 +267,7 @@ async def delete_station(
 
 @api_router.get("/admin/users")
 async def list_users(user: Annotated[dict, Depends(require_user)]):
-    require_admin(user)
+    require_staff(user)
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("username", 1).to_list(500)
     return users
 
@@ -319,7 +351,7 @@ async def delete_user(user_id: str, user: Annotated[dict, Depends(require_user)]
 
 @api_router.get("/admin/share-links")
 async def list_share_links(user: Annotated[dict, Depends(require_user)]):
-    require_admin(user)
+    require_staff(user)
     links = await db.share_links.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return links
 
@@ -507,15 +539,24 @@ async def upload_inspection(
     station_name: Optional[str] = Form(None),
     inspection_date: Optional[str] = Form(None),
 ):
-    # SMs always upload for THEIR assigned station — client value is ignored.
+    # SMs always upload for THEIR assigned station. First-time upload from an
+    # auto-provisioned SM (station_name is empty) locks in the value they submit.
     if user["role"] == "sm":
         assigned = user.get("station_name")
         if not assigned:
-            raise HTTPException(
-                status_code=400,
-                detail="Your account has no assigned station. Contact the admin.",
+            if not station_name or not station_name.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter your station name on this first upload — it will be locked to your account.",
+                )
+            effective_station = station_name.strip()
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$set": {"station_name": effective_station}},
             )
-        effective_station = assigned
+            logger.info(f"Locked station '{effective_station}' to SM {user['username']}")
+        else:
+            effective_station = assigned
     else:
         if not station_name or not station_name.strip():
             raise HTTPException(status_code=400, detail="Station name is required")
@@ -558,7 +599,7 @@ async def public_upload(
 @api_router.get("/inspections/station-names")
 async def list_station_names(user: Annotated[dict, Depends(require_user)]):
     """Distinct station names taken from actual SM submissions (admin filter use)."""
-    require_admin(user)
+    require_staff(user)
     names = await db.inspections.distinct("station_name", {"is_deleted": False})
     names = sorted([n for n in names if n])
     return names
@@ -574,7 +615,7 @@ async def list_inspections(
     limit: int = 200,
 ):
     query: dict = {"is_deleted": False}
-    # SM can only see their own
+    # SM can only see their own; admin & viewer see all
     if user["role"] == "sm":
         query["uploaded_by_id"] = user["id"]
     if station_name:
@@ -733,6 +774,7 @@ async def list_grievances(
     query: dict = {"is_deleted": False}
     if user["role"] == "sm":
         query["submitted_by_id"] = user["id"]
+    # admins and viewers see all grievances
     if not include_resolved:
         query["resolved"] = False
     docs = (
@@ -785,7 +827,7 @@ async def day_detail(
         "photos_count": <int>,
       }
     """
-    require_admin(user)
+    require_staff(user)
     d = date or datetime.now(timezone.utc).date().isoformat()
     docs = await db.inspections.find(
         {"is_deleted": False, "inspection_date": d}, {"_id": 0}
@@ -830,7 +872,7 @@ async def reports_summary(
     date_to: Optional[str] = None,
     station_name: Optional[str] = None,
 ):
-    require_admin(user)
+    require_staff(user)
     query: dict = {"is_deleted": False}
     if date_from or date_to:
         rng: dict = {}
@@ -940,7 +982,7 @@ async def reports_leaderboard(
       - `most_recent`: within the same window, per-station clean_pct of the
         SINGLE most recent upload, ranked desc.
     """
-    require_admin(user)
+    require_staff(user)
 
     def _is_clean(doc):
         if doc.get("aggregate_rating") == "Clean":
@@ -1074,6 +1116,37 @@ SM_ROSTER: list[tuple[str, str]] = [
 ]
 
 
+# Full-name → role for named accounts. Editors get the "admin" role (view + edit).
+# Viewers get the "viewer" role (view only).
+NAMED_EDITORS: list[str] = [
+    "Dhananjay Kumar Rai",
+    "Santosh Kumar",
+    "Ashok Kumar",
+    "Anand Kishore",
+    "Ajay Kumar I",
+]
+NAMED_VIEWERS: list[str] = [
+    "Rajesh Gupta",
+    "Abhay Mondal",
+    "Sudip Kumar",
+    "Ajay Kumar II",
+    "Santosh Gupta",
+    "Govind Sharma",
+    "SrDCM",
+    "ACM 1",
+    "ACM 2",
+    "ACM 3",
+    "AOM",
+    "DOM",
+    "ADRM",
+    "DRM",
+]
+
+
+def _uname_from_name(name: str) -> str:
+    return _re_login.sub(r"[^a-z0-9]+", ".", name.lower()).strip(".")
+
+
 async def seed():
     # Drop legacy seeded stations (Jaipur, NDLS, etc.). Stations are now defined
     # purely by what SMs are assigned to via SM_ROSTER.
@@ -1131,12 +1204,55 @@ async def seed():
             )
 
     # Remove any SM accounts that aren't on the roster anymore (legacy sm046..sm100 etc.)
+    # Note: we now allow sm046+ to be auto-provisioned on login, but we do NOT
+    # wipe them if they exist. Only remove those that are older placeholders
+    # (roster + any additional 'sm\d+' accounts stay).
     removed = await db.users.delete_many(
-        {"role": "sm", "username": {"$nin": list(valid_usernames)}}
+        {
+            "role": "sm",
+            "username": {"$nin": list(valid_usernames)},
+            "station_name": None,
+            "created_at": {"$lt": "2026-02-04"},
+        }
     )
     if removed.deleted_count:
         logger.info(f"Removed {removed.deleted_count} legacy SM accounts not on roster")
     logger.info(f"Roster sync complete: {len(SM_ROSTER)} SMs active")
+
+    # Named editors & viewers
+    for full_name in NAMED_EDITORS:
+        uname = _uname_from_name(full_name)
+        if not await db.users.find_one({"username": uname}):
+            await db.users.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "username": uname,
+                    "password_hash": hash_password("Admin@123"),
+                    "full_name": full_name,
+                    "role": "admin",
+                    "station_id": None,
+                    "station_name": None,
+                    "active": True,
+                    "created_at": now_iso(),
+                }
+            )
+    for full_name in NAMED_VIEWERS:
+        uname = _uname_from_name(full_name)
+        if not await db.users.find_one({"username": uname}):
+            await db.users.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "username": uname,
+                    "password_hash": hash_password("Admin@123"),
+                    "full_name": full_name,
+                    "role": "viewer",
+                    "station_id": None,
+                    "station_name": None,
+                    "active": True,
+                    "created_at": now_iso(),
+                }
+            )
+    logger.info(f"Seeded/verified {len(NAMED_EDITORS)} editors + {len(NAMED_VIEWERS)} viewers")
 
 
 @app.on_event("startup")

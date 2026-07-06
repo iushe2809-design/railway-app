@@ -20,8 +20,11 @@ function Protected({ children, role }) {
   const user = getUser();
   const location = useLocation();
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (role && user.role !== role) {
-    return <Navigate to={user.role === "admin" ? "/admin" : "/upload"} replace />;
+  if (role === "admin" && !(user.role === "admin" || user.role === "viewer")) {
+    return <Navigate to={user.role === "sm" ? "/upload" : "/login"} replace />;
+  }
+  if (role && role !== "admin" && user.role !== role) {
+    return <Navigate to={user.role === "admin" || user.role === "viewer" ? "/admin" : "/upload"} replace />;
   }
   return children;
 }
@@ -89,7 +92,7 @@ function App() {
 function RootRedirect() {
   const user = getUser();
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={user.role === "admin" ? "/admin" : "/upload"} replace />;
+  return <Navigate to={user.role === "admin" || user.role === "viewer" ? "/admin" : "/upload"} replace />;
 }
 
 export default App;

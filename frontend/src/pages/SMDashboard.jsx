@@ -15,12 +15,14 @@ export default function SMDashboard() {
   const [uploading, setUploading] = useState(false);
   const [recent, setRecent] = useState([]);
   const [inspectionDate, setInspectionDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [manualStation, setManualStation] = useState("");
   const [grievanceStation, setGrievanceStation] = useState(user?.station_name || "");
   const [grievanceText, setGrievanceText] = useState("");
   const [submittingGrievance, setSubmittingGrievance] = useState(false);
   const [myGrievances, setMyGrievances] = useState([]);
 
   const assignedStation = user?.station_name || "";
+  const needsStationSetup = !assignedStation;
 
   const loadRecent = async () => {
     try {
@@ -38,15 +40,33 @@ export default function SMDashboard() {
   useEffect(() => { loadRecent(); }, []);
 
   const onUpload = async (files) => {
-    if (!assignedStation) { toast.error("No station is assigned to your account. Contact the admin."); return false; }
+    let stationToUse = assignedStation;
+    if (needsStationSetup) {
+      if (!manualStation.trim()) {
+        toast.error("Enter your station name — it will be locked to your ID after this upload.");
+        return false;
+      }
+      stationToUse = manualStation.trim();
+    }
     if (!inspectionDate) { toast.error("Please select the inspection date"); return false; }
     setUploading(true);
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));
     fd.append("inspection_date", inspectionDate);
+    if (needsStationSetup) fd.append("station_name", stationToUse);
     try {
       await api.post("/inspections/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success(`Submitted ${files.length} photo${files.length === 1 ? "" : "s"} — thank you!`);
+      toast.success(needsStationSetup
+        ? `Submitted — your station "${stationToUse}" is now locked to your ID.`
+        : `Submitted ${files.length} photo${files.length === 1 ? "" : "s"} — thank you!`);
+      if (needsStationSetup) {
+        // Refresh session so header + lock UI update
+        try {
+          const me = await api.get("/auth/me");
+          setSession(localStorage.getItem("rc_token"), me.data);
+        } catch (_) { /* noop */ }
+        setTimeout(() => window.location.reload(), 800);
+      }
       loadRecent();
       return true;
     } catch (err) {
@@ -88,13 +108,30 @@ export default function SMDashboard() {
           <Label className="text-slate-300 flex items-center gap-1.5">
             <MapPin className="w-3.5 h-3.5 text-blue-400" /> Station
           </Label>
-          <div className="mt-1 h-11 rounded-md border border-slate-800 bg-[#0B1120] px-3 flex items-center justify-between" data-testid="sm-station-display">
-            <span className="font-mono text-lg tracking-wide text-slate-100">{assignedStation || "—"}</span>
-            <span className="flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-slate-500">
-              <Lock className="w-3 h-3" /> Locked
-            </span>
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">Assigned to your User ID — cannot be changed.</div>
+          {needsStationSetup ? (
+            <>
+              <Input
+                value={manualStation}
+                onChange={(e) => setManualStation(e.target.value)}
+                className="bg-[#0B1120] border-slate-800 text-slate-100 mt-1 h-11 font-mono tracking-wide"
+                placeholder="Type your station code (e.g. RNC)"
+                data-testid="sm-manual-station-input"
+              />
+              <div className="text-[11px] text-amber-400 mt-1">
+                First-time setup — this will lock to your User ID after your first upload.
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mt-1 h-11 rounded-md border border-slate-800 bg-[#0B1120] px-3 flex items-center justify-between" data-testid="sm-station-display">
+                <span className="font-mono text-lg tracking-wide text-slate-100">{assignedStation}</span>
+                <span className="flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                  <Lock className="w-3 h-3" /> Locked
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1">Assigned to your User ID — cannot be changed.</div>
+            </>
+          )}
         </div>
         <div>
           <Label className="text-slate-300 flex items-center gap-1.5">

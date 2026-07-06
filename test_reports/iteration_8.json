@@ -1,0 +1,74 @@
+{
+  "summary": "Iter-8: Verified SM auto-provisioning, first-upload station lock, named editor/viewer accounts, viewer RBAC (read-allow + write-block), and SM UI first-time flow. 44/44 backend tests pass. E2E SM first-upload UI flow works (station locks + Locked badge). Found 2 frontend bugs (1 HIGH routing, 1 latent code bug in SMDashboard) that must be fixed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Login.jsx",
+        "issue": "Viewer role (e.g. rajesh.gupta, srdcm) is redirected to /upload after login instead of /admin. Line 32: `res.data.user.role === 'admin' ? '/admin' : '/upload'` — this treats viewers as SM. Requirement: viewer must land on /admin.",
+        "selector": "N/A",
+        "priority": "HIGH"
+      },
+      {
+        "component": "SMDashboard.jsx",
+        "issue": "Line 66 calls `setSession(...)` but `setSession` is NOT imported from `@/lib/api` (line 3 only imports api, getUser, fileUrl). This is a latent ReferenceError. Currently masked because it lives inside an inner try/catch that swallows the error and the subsequent `window.location.reload()` refreshes the session from /auth/me on mount. Fix: add `setSession` to the import statement. Flow still works end-to-end but the intended in-place session refresh never executes.",
+        "selector": "sm-manual-station-input flow",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_assertions": {
+    "sm_auto_provision_new_account_role_sm_station_null": true,
+    "sm_auto_provision_wrong_password_returns_401": true,
+    "sm_pattern_admin_password_blocked_401_for_sm001_and_auto_provisioned": true,
+    "first_upload_sets_station_persists_to_user_and_second_upload_uses_locked_value": true,
+    "first_upload_without_station_name_returns_400": true,
+    "named_editors_login_200_role_admin_full_name_correct": ["dhananjay.kumar.rai", "santosh.kumar", "ashok.kumar", "anand.kishore", "ajay.kumar.i"],
+    "named_viewers_login_200_role_viewer": ["rajesh.gupta", "abhay.mondal", "sudip.kumar", "ajay.kumar.ii", "santosh.gupta", "govind.sharma", "srdcm", "acm.1", "acm.2", "acm.3", "aom", "dom", "adrm", "drm"],
+    "viewer_get_admin_users_200": true,
+    "viewer_get_station_names_200": true,
+    "viewer_get_reports_summary_200": true,
+    "viewer_get_reports_leaderboard_200": true,
+    "viewer_get_day_detail_200": true,
+    "viewer_get_grievances_200": true,
+    "viewer_get_inspections_200": true,
+    "viewer_get_share_links_200": true,
+    "viewer_post_admin_users_403": true,
+    "viewer_post_admin_stations_403": true,
+    "viewer_post_share_link_403": true,
+    "viewer_delete_share_link_403": true,
+    "viewer_delete_inspection_403": true,
+    "viewer_override_photo_403": true,
+    "viewer_resolve_grievance_403": true,
+    "viewer_delete_grievance_403": true,
+    "regression_admin_login_200": true,
+    "regression_sm001_locked_to_RNC": true,
+    "ui_sm_first_upload_locks_station_and_shows_sm_station_display_with_Locked_badge": true,
+    "ui_viewer_header_shows_Read_only_Viewer_subtitle_and_admin_nav_links": true,
+    "ui_viewer_login_lands_on_/upload_NOT_/admin": "BUG — see frontend_issues[0]"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter8.py",
+    "/app/test_reports/pytest/pytest_iter8.xml"
+  ],
+  "action_items": [
+    "Fix Login.jsx line 32: change `res.data.user.role === 'admin' ? '/admin' : '/upload'` → `(res.data.user.role === 'admin' || res.data.user.role === 'viewer') ? '/admin' : '/upload'` so viewers land on /admin.",
+    "Fix SMDashboard.jsx line 3: import setSession — change `import api, { getUser, fileUrl } from \"@/lib/api\";` to `import api, { getUser, fileUrl, setSession } from \"@/lib/api\";` so the in-place session refresh on first upload actually works before the reload."
+  ],
+  "critical_code_review_comments": [
+    "server.py login: `is_sm_pattern` regex is `^sm\\d{1,5}$` — good. But note that the SM auto-provision check occurs BEFORE the admin-password guard, and the seed() removes 'sm_no_station' users older than 2026-02-04. Any auto-provisioned sm without a station survives across restarts. If admin wants to clean up test artifacts (sm100..sm999 without station), there's no admin endpoint to do so — consider a cleanup route.",
+    "server.py _save_inspection: SM first-upload station value is trusted verbatim (only .strip()). No sanitization or max length. A malicious SM could set station_name='' or a very long string. Recommend: enforce `1 <= len(station_name) <= 32` and strip odd characters.",
+    "SMDashboard.jsx line 66 setSession not imported (see bug). Even after fixing, note that `setSession` sets localStorage; after 800ms `window.location.reload()` re-fetches /auth/me anyway — the in-place setSession call is redundant. Consider dropping it.",
+    "Login.jsx uses `location.state?.from?.pathname` — a viewer whose Protected redirect landed on /login with state.from=/admin will get /admin, but a direct /login visit gets /upload. This is confusing behaviour. The routing bug will manifest for direct-login users only."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter8.py"],
+  "success_rate": {"backend": "100% (44/44)", "frontend": "80% — first-upload flow works E2E; viewer routing bug + missing import"},
+  "test_credentials": "admin/Admin@123, sm001/Station@123, rajesh.gupta/Admin@123 (viewer), srdcm/Admin@123 (viewer), dhananjay.kumar.rai/Admin@123 (editor). Auto-provisioned in tests: sm100-sm999 range (random per test run).",
+  "seed_data_creation": "Backend tests auto-provisioned multiple sm100-sm999 accounts and one TEST_STN_* inspection per test. UI test created sm132 with station TEST_UI_STN and 1 inspection.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully verified. When retesting viewer routing after fix, log in fresh (clear localStorage) at /login as rajesh.gupta / Admin@123 — you MUST land on /admin, not /upload. When retesting SM first-upload flow, note that the 'Made with Emergent' widget in the preview environment overlaps the Submit button in the default 1280x900 viewport — use a taller viewport (1280x1600) OR fire the click via page.evaluate to bypass the overlay.",
+  "rca_of_the_issue": "Login.jsx redirect uses a strict `=== 'admin'` check; new 'viewer' role introduced in iter-8 was not added to the branch. SMDashboard.jsx setSession import was forgotten when the first-upload session-refresh block was added. Both are simple line-level fixes."
+}
