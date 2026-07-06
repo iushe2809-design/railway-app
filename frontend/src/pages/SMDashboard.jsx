@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import api, { getUser, fileUrl } from "@/lib/api";
+import api, { getUser, fileUrl, setSession } from "@/lib/api";
 import UploadZone from "@/components/UploadZone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

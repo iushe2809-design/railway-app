@@ -29,7 +29,7 @@ export default function Login() {
       toast.success(`Welcome, ${res.data.user.full_name}`);
       const dest =
         location.state?.from?.pathname ||
-        (res.data.user.role === "admin" ? "/admin" : "/upload");
+        (res.data.user.role === "admin" || res.data.user.role === "viewer" ? "/admin" : "/upload");
       navigate(dest, { replace: true });
     } catch (err) {
       const msg = err?.response?.data?.detail || "Login failed";

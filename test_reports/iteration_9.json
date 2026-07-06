@@ -1,0 +1,27 @@
+{
+  "summary": "Retest of iter-8 frontend fixes. Both fixes verified: (1) Viewer role routing now sends viewers to /admin instead of /upload. (2) SMDashboard setSession import works — auto-provision + first-upload flow succeeds end-to-end with no console errors, station is locked after upload and page reloads correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": [
+    {"case": "rajesh.gupta (viewer) login", "expected": "/admin", "actual": "/admin", "result": "PASS"},
+    {"case": "srdcm (viewer) login", "expected": "/admin", "actual": "/admin", "result": "PASS"},
+    {"case": "dhananjay.kumar.rai (editor) login regression", "expected": "/admin", "actual": "/admin", "result": "PASS"},
+    {"case": "admin (super admin) login regression", "expected": "/admin", "actual": "/admin", "result": "PASS"},
+    {"case": "sm001 (SM) login regression", "expected": "/upload", "actual": "/upload", "result": "PASS"},
+    {"case": "sm296 auto-provision + first upload with station TST897", "expected": "toast + reload + locked station display", "actual": "toast 'Submitted — your station TST897 is now locked to your ID.' shown; sm-station-display text = 'TST897 Locked'; page reloaded; 1 submission visible in recent list", "result": "PASS"}
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (per instructions)", "frontend": "100% (6/6)"},
+  "test_credentials": "admin/Admin@123, sm001/Station@123, rajesh.gupta/Admin@123, srdcm/Admin@123, dhananjay.kumar.rai/Admin@123, sm296/Station@123 (auto-provisioned)",
+  "seed_data_creation": "Auto-provisioned sm296 with station TST897 via first-upload flow; 1 inspection record created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both iter-8 line-level frontend fixes are verified working in preview. No regressions observed. Backend was not re-tested per request (already 100% green in iter-8)."
+}
