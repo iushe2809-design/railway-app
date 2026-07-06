@@ -181,10 +181,22 @@ async def login(req: LoginRequest):
     user = await db.users.find_one({"username": username}, {"_id": 0})
     if not user or not user.get("active", True):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not verify_password(password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+
     # SM usernames MUST NOT be able to log in with Admin@123.
     if username.startswith("sm") and password == "Admin@123":
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Named accounts (editors + viewers) can log in with EITHER their normal
+    # Admin@123 (→ admin/viewer role) OR Station@123 (→ SM upload mode). The
+    # Station@123 branch bypasses the stored password hash intentionally so
+    # named officials can act as an SM without a second account.
+    is_named = user["role"] in ("admin", "viewer") and not username.startswith("sm")
+    if is_named and password == "Station@123":
+        token = create_token(user["id"], "sm", mode="sm")
+        acting = {**user, "role": "sm", "station_name": None}
+        return {"token": token, "user": public_user(acting)}
+
+    if not verify_password(password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_token(user["id"], user["role"])

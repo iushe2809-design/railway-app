@@ -26,13 +26,15 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_token(user_id: str, role: str) -> str:
+def create_token(user_id: str, role: str, mode: Optional[str] = None) -> str:
     payload = {
         "sub": user_id,
         "role": role,
         "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRE_DAYS),
         "iat": datetime.now(timezone.utc),
     }
+    if mode:
+        payload["mode"] = mode
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
 
@@ -61,6 +63,10 @@ def require_auth_factory(db_getter):
         user = await get_current_user_from_db(db, payload["sub"])
         if not user:
             raise HTTPException(status_code=401, detail="User not found or inactive")
+        # Optional 'sm mode' override for named accounts logging in with Station@123
+        mode = payload.get("mode")
+        if mode == "sm":
+            user = {**user, "role": "sm", "station_name": None, "_session_mode": "sm"}
         return user
 
     return _require
