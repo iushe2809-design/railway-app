@@ -7,8 +7,9 @@ import os
 import re
 import uuid
 from typing import Optional
+from anthropic import Antropic
 
-from emergentintegrations.llm.chat import ImageContent, LlmChat, UserMessage
+
 from PIL import Image
 
 try:  # Optional HEIC support
