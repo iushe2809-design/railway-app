@@ -140,31 +140,50 @@ async def analyze_image(
     calibration_examples: Optional[list] = None,
 ) -> dict:
     """Run Claude vision analysis on a single image. Returns the parsed JSON."""
-    if not _emergent_key():
-        raise RuntimeError("EMERGENT_LLM_KEY not configured")
+    if not _anthropic_key():
+        raise RuntimeError("ANTHROPIC_API_KEY not configured")
 
     norm_bytes, norm_ct = normalize_image(image_bytes, content_type)
     b64 = base64.b64encode(norm_bytes).decode("utf-8")
-    image = ImageContent(image_base64=b64)
 
     calibration = _calibration_block(calibration_examples)
     station_ctx = f"\nStation: {station_name}\n" if station_name else ""
+
     user_text = (
-        "Analyze this railway station photograph. Respond with ONLY the JSON object as instructed."
+        "Analyze this railway station photograph. "
+        "Respond ONLY with valid JSON.\n"
         + station_ctx
         + calibration
     )
 
-    chat = LlmChat(
-        api_key=_emergent_key(),
-        session_id=f"inspect-{uuid.uuid4()}",
-        system_message=SYSTEM_PROMPT,
-    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+    client = Anthropic(api_key=_anthropic_key())
 
-    user_msg = UserMessage(text=user_text, file_contents=[image])
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1500,
+        system=SYSTEM_PROMPT,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": norm_ct,
+                            "data": b64,
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": user_text,
+                    },
+                ],
+            }
+        ],
+    )
 
-    response = await chat.send_message(user_msg)
-    text = response if isinstance(response, str) else str(response)
+    text = response.content[0].text
 
     try:
         result = _extract_json(text)
