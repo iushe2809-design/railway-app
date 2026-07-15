@@ -7,7 +7,7 @@ import os
 import re
 import uuid
 from typing import Optional
-from anthropic import Antropic
+from anthropic import Anthropic
 
 
 from PIL import Image
@@ -21,8 +21,8 @@ except Exception:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
-def _emergent_key() -> str:
-    return os.environ.get("EMERGENT_LLM_KEY", "")
+def _anthropic_key() -> str:
+    return os.environ.get("ANTHROPIC_API_KEY", "")
 
 
 SYSTEM_PROMPT = """You are an expert railway station cleanliness inspector for Indian Railways.
