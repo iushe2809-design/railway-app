@@ -31,7 +31,7 @@ fsspec==2026.6.0
 
 
 
-
+google-generativeai==0.8.5
 anthropic==0.60.0
 
 
