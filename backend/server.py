@@ -472,81 +472,85 @@ async def _save_inspection(
     files: List[UploadFile],
     inspection_date: Optional[str] = None,
 ) -> dict:
+
     if len(files) != 5:
         raise HTTPException(
             status_code=400,
             detail="Exactly 5 photos are required for every inspection."
-    )
+        )
+
     photos = []
-calibration = await _calibration_for_station(station_name)
+    calibration = await _calibration_for_station(station_name)
 
-for f in files:
-    content_type = (f.content_type or "").lower()
+    for f in files:
+        content_type = (f.content_type or "").lower()
 
-    if content_type not in ALLOWED_MIMES and not content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type: {content_type or 'unknown'}. Please upload an image.",
+        if content_type not in ALLOWED_MIMES and not content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {content_type or 'unknown'}. Please upload an image.",
+            )
+
+        data = await f.read()
+
+        if len(data) > 25 * 1024 * 1024:
+            raise HTTPException(
+                status_code=400,
+                detail="File too large (max 25MB)"
+            )
+
+        # Normalize to JPEG if needed
+        norm_bytes, norm_ct = normalize_image(data, content_type)
+
+        ext = norm_ct.split("/")[-1].replace("jpeg", "jpg")
+        slug = re.sub(r"[^a-z0-9]+", "-", station_name.lower())[:40] or "station"
+        path = f"{APP_NAME}/stations/{slug}/{uuid.uuid4()}.{ext}"
+
+        result = put_object(path, norm_bytes, norm_ct)
+
+        try:
+            ai = await analyze_image(
+                norm_bytes,
+                norm_ct,
+                station_name=station_name,
+                calibration_examples=calibration,
+            )
+        except Exception as e:
+            logger.exception(f"AI analysis failed: {e}")
+            ai = {
+                "rating": "Needs Attention",
+                "score": 50,
+                "area_detected": "Unknown",
+                "area_breakdown": [],
+                "issues": [f"AI analysis error: {str(e)[:120]}"],
+                "recommendations": ["Retry analysis later"],
+            }
+
+        photos.append(
+            {
+                "id": str(uuid.uuid4()),
+                "storage_path": result["path"],
+                "original_filename": f.filename,
+                "content_type": norm_ct,
+                "size": result.get("size", len(norm_bytes)),
+                "ai_analysis": ai,
+                "override": None,
+                "uploaded_at": now_iso(),
+            }
         )
-
-    data = await f.read()
-
-    if len(data) > 25 * 1024 * 1024:
-        raise HTTPException(
-            status_code=400,
-            detail="File too large (max 25MB)",
-        )
-
-    # Normalize to JPEG if needed
-    norm_bytes, norm_ct = normalize_image(data, content_type)
-
-    ext = norm_ct.split("/")[-1].replace("jpeg", "jpg")
-    slug = re.sub(r"[^a-z0-9]+", "-", station_name.lower())[:40] or "station"
-    path = f"{APP_NAME}/stations/{slug}/{uuid.uuid4()}.{ext}"
-
-    result = put_object(path, norm_bytes, norm_ct)
-
-    try:
-        ai = await analyze_image(
-            norm_bytes,
-            norm_ct,
-            station_name=station_name,
-            calibration_examples=calibration,
-        )
-    except Exception as e:
-        logger.exception(f"AI analysis failed: {e}")
-        ai = {
-            "rating": "Needs Attention",
-            "score": 50,
-            "area_detected": "Unknown",
-            "area_breakdown": [],
-            "issues": [f"AI analysis error: {str(e)[:120]}"],
-            "recommendations": ["Retry analysis later"],
-        }
-
-    photos.append(
-        {
-            "id": str(uuid.uuid4()),
-            "storage_path": result["path"],
-            "original_filename": f.filename,
-            "content_type": norm_ct,
-            "size": result.get("size", len(norm_bytes)),
-            "ai_analysis": ai,
-            "override": None,
-            "uploaded_at": now_iso(),
-        }
-    )
 
     score, rating = await aggregate_inspection(photos)
+
     today_iso_date = datetime.now(timezone.utc).date().isoformat()
     insp_date = (inspection_date or today_iso_date).strip()
+
     inspection = {
         "id": str(uuid.uuid4()),
         "station_id": station_id,
         "station_name": station_name.strip(),
         "uploaded_by_id": uploaded_by_id,
         "uploaded_by_name": uploaded_by_name,
-        "upload_source": upload_source,  # "sm" or "public"
+        "upload_source": upload_source,
         "photos": photos,
         "aggregate_score": score,
         "aggregate_rating": rating,
@@ -554,7 +558,9 @@ for f in files:
         "created_at": now_iso(),
         "is_deleted": False,
     }
+
     await db.inspections.insert_one(inspection)
+
     return {k: v for k, v in inspection.items() if k != "_id"}
 
 
