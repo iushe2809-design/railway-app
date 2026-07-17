@@ -137,7 +137,6 @@ def _calibration_block(examples: Optional[list]) -> str:
     station_name: Optional[str] = None,
     calibration_examples: Optional[list] = None,
 ) -> dict:
-
     if not _gemini_key():
         raise RuntimeError("GEMINI_API_KEY not configured")
 
