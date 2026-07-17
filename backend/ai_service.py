@@ -177,9 +177,9 @@ response = model.generate_content(parts)
 
 text = response.text
 
-    try:
+try:
         result = _extract_json(text)
-    except Exception as e:
+except Exception as e:
         logger.error(f"Failed to parse AI response: {e} | raw={text[:500]}")
         return {
             "rating": "Needs Attention",
