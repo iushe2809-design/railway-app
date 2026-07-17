@@ -177,9 +177,6 @@ response = model.generate_content(parts)
 
 text = response.text
 
-response = model.generate_content(parts)
-
-    text = response.text
 
     try:
         result = _extract_json(text)
