@@ -137,6 +137,11 @@ def _calibration_block(examples: Optional[list]) -> str:
     station_name: Optional[str] = None,
     calibration_examples: Optional[list] = None,
 ) -> dict:
+    """
+    Run Gemini Vision analysis on multiple images.
+    Returns the parsed JSON.
+    """
+
     if not _gemini_key():
         raise RuntimeError("GEMINI_API_KEY not configured")
 
@@ -152,6 +157,9 @@ def _calibration_block(examples: Optional[list]) -> str:
 
     user_text = (
         "Analyze these railway station photographs together. "
+        "Treat all uploaded images as one inspection. "
+        "Ignore passengers, trains, luggage, and moving objects. "
+        "Evaluate only the cleanliness and maintenance of the station. "
         "Respond ONLY with valid JSON.\n"
         + station_ctx
         + calibration
@@ -165,10 +173,7 @@ def _calibration_block(examples: Optional[list]) -> str:
     parts = [user_text]
 
     for image_bytes, content_type in images:
-        norm_bytes, norm_ct = normalize_image(
-            image_bytes,
-            content_type,
-        )
+        norm_bytes, norm_ct = normalize_image(image_bytes, content_type)
 
         parts.append(
             {
@@ -183,10 +188,12 @@ def _calibration_block(examples: Optional[list]) -> str:
 
     try:
         result = _extract_json(text)
+
     except Exception as e:
         logger.error(
             f"Failed to parse AI response: {e} | raw={text[:500]}"
         )
+
         return {
             "rating": "Needs Attention",
             "score": 50,
@@ -196,12 +203,13 @@ def _calibration_block(examples: Optional[list]) -> str:
                 "AI analysis could not be parsed"
             ],
             "recommendations": [
-                "Re-upload the photo for a fresh analysis"
+                "Re-upload the photos for a fresh analysis"
             ],
             "_raw": text[:1000],
         }
 
     score = int(result.get("score", 0))
+
     result["rating"] = (
         "Clean"
         if score >= 80
