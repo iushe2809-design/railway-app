@@ -177,9 +177,13 @@ response = model.generate_content(parts)
 
 text = response.text
 
-try:
+response = model.generate_content(parts)
+
+    text = response.text
+
+    try:
         result = _extract_json(text)
-except Exception as e:
+    except Exception as e:
         logger.error(f"Failed to parse AI response: {e} | raw={text[:500]}")
         return {
             "rating": "Needs Attention",
@@ -191,7 +195,8 @@ except Exception as e:
             "_raw": text[:1000],
         }
 
-# Normalize (2-tire threshold): >=80 Clean; <80 Needs Attention
-score = int(result.get("Score",0))
-result["rating"] - "Clean" if score >= 80 else "Needs Attention"
-return result
+    # Normalize (2-tier threshold): >=80 Clean; <80 Need Attention
+    score = int(result.get("score", 0))
+    result["rating"] = "Clean" if score >= 80 else "Need Attention"
+
+    return result
