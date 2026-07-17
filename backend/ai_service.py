@@ -132,25 +132,27 @@ def _calibration_block(examples: Optional[list]) -> str:
         "apply this judgement when borderline):\n" + "\n".join(lines) + "\n"
     )
 
-
-async def analyze_image(
-    images:list[tuple[bytes,str]],
+    async def analyze_image(
+    images: list[tuple[bytes, str]],
     station_name: Optional[str] = None,
     calibration_examples: Optional[list] = None,
 ) -> dict:
-    """Run Claude vision analysis on a single image. Returns the parsed JSON."""
+    """Run Gemini vision analysis on multiple images."""
+
     if not _gemini_key():
         raise RuntimeError("GEMINI_API_KEY not configured")
+
     genai.configure(api_key=_gemini_key())
 
-    
-    
-
     calibration = _calibration_block(calibration_examples)
-    station_ctx = f"\nStation: {station_name}\n" if station_name else ""
+    station_ctx = (
+        f"\nStation: {station_name}\n"
+        if station_name
+        else ""
+    )
 
     user_text = (
-        "Analyze this railway station photograph. "
+        "Analyze these railway station photographs together. "
         "Respond ONLY with valid JSON.\n"
         + station_ctx
         + calibration
@@ -163,15 +165,18 @@ async def analyze_image(
 
     parts = [user_text]
 
-for image_bytes, content_type in images:
-    norm_bytes, norm_ct = normalize_image(image_bytes, content_type)
+    for image_bytes, content_type in images:
+        norm_bytes, norm_ct = normalize_image(
+            image_bytes,
+            content_type,
+        )
 
-    parts.append(
-        {
-            "mime_type": norm_ct,
-            "data": norm_bytes,
-        }
-    )
+        parts.append(
+            {
+                "mime_type": norm_ct,
+                "data": norm_bytes,
+            }
+        )
 
     response = model.generate_content(parts)
 
@@ -180,19 +185,29 @@ for image_bytes, content_type in images:
     try:
         result = _extract_json(text)
     except Exception as e:
-        logger.error(f"Failed to parse AI response: {e} | raw={text[:500]}")
+        logger.error(
+            f"Failed to parse AI response: {e} | raw={text[:500]}"
+        )
         return {
             "rating": "Needs Attention",
             "score": 50,
             "area_detected": "Unknown",
             "area_breakdown": [],
-            "issues": ["AI analysis could not be parsed"],
-            "recommendations": ["Re-upload the photo for a fresh analysis"],
+            "issues": [
+                "AI analysis could not be parsed"
+            ],
+            "recommendations": [
+                "Re-upload the photo for a fresh analysis"
+            ],
             "_raw": text[:1000],
         }
 
-    # Normalize (2-tier threshold): >=80 Clean; <80 Need Attention
     score = int(result.get("score", 0))
-    result["rating"] = "Clean" if score >= 80 else "Need Attention"
+    result["rating"] = (
+        "Clean"
+        if score >= 80
+        else "Need Attention"
+    )
 
     return result
+    
