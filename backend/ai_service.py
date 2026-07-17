@@ -1,4 +1,4 @@
-"""Claude vision analysis for cleanliness inspection."""
+"""Gemini vision analysis for railway cleanliness inspection."""
 import base64
 import io
 import json
@@ -7,7 +7,7 @@ import os
 import re
 import uuid
 from typing import Optional
-from anthropic import Anthropic
+import google.generativeai as genai
 
 
 from PIL import Image
@@ -21,8 +21,8 @@ except Exception:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
-def _anthropic_key() -> str:
-    return os.environ.get("ANTHROPIC_API_KEY", "")
+def _gemini_key() -> str:
+    return os.environ.get("GEMINI_API_KEY", "")
 
 
 SYSTEM_PROMPT = """You are an expert railway station cleanliness inspector for Indian Railways.
@@ -88,11 +88,11 @@ def normalize_image(image_bytes: bytes, content_type: str) -> tuple[bytes, str]:
         if img.mode not in ("RGB", "L"):
             img = img.convert("RGB")
         # Down-size very large images
-        max_side = 2000
+        max_side = 1024
         if max(img.size) > max_side:
             img.thumbnail((max_side, max_side))
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=85, optimize=True)
+        img.save(buf, format="JPEG", quality=75, optimize=True)
         return buf.getvalue(), "image/jpeg"
     except Exception as e:
         logger.warning(f"Image normalize failed ({e}); keeping original bytes")
@@ -140,8 +140,9 @@ async def analyze_image(
     calibration_examples: Optional[list] = None,
 ) -> dict:
     """Run Claude vision analysis on a single image. Returns the parsed JSON."""
-    if not _anthropic_key():
-        raise RuntimeError("ANTHROPIC_API_KEY not configured")
+    if not _gemini_key():
+        raise RuntimeError("GEMINI_API_KEY not configured")
+    genai.configure(api_key=_gemini_key())
 
     norm_bytes, norm_ct = normalize_image(image_bytes, content_type)
     b64 = base64.b64encode(norm_bytes).decode("utf-8")
@@ -156,34 +157,22 @@ async def analyze_image(
         + calibration
     )
 
-    client = Anthropic(api_key=_anthropic_key())
+    model = genai.GenerativeModel(
+    model_name="gemini-2.5-flash",
+    system_instruction=SYSTEM_PROMPT,
+)
 
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1500,
-        system=SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": norm_ct,
-                            "data": b64,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": user_text,
-                    },
-                ],
-            }
-        ],
-    )
+response = model.generate_content(
+    [
+        user_text,
+        {
+            "mime_type": norm_ct,
+            "data": norm_bytes,
+        },
+    ]
+)
 
-    text = response.content[0].text
+text = response.text
 
     try:
         result = _extract_json(text)
