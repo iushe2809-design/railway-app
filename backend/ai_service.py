@@ -143,6 +143,7 @@ def _calibration_block(examples: Optional[list]) -> str:
     genai.configure(api_key=_gemini_key())
 
     calibration = _calibration_block(calibration_examples)
+
     station_ctx = (
         f"\nStation: {station_name}\n"
         if station_name
