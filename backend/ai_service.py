@@ -145,7 +145,7 @@ async def analyze_image(
     genai.configure(api_key=_gemini_key())
 
     norm_bytes, norm_ct = normalize_image(image_bytes, content_type)
-    b64 = base64.b64encode(norm_bytes).decode("utf-8")
+    
 
     calibration = _calibration_block(calibration_examples)
     station_ctx = f"\nStation: {station_name}\n" if station_name else ""
@@ -158,21 +158,21 @@ async def analyze_image(
     )
 
     model = genai.GenerativeModel(
-    model_name="gemini-2.5-flash",
-    system_instruction=SYSTEM_PROMPT,
-)
+        model_name="gemini-2.5-flash",
+        system_instruction=SYSTEM_PROMPT,
+    )
 
-response = model.generate_content(
-    [
-        user_text,
-        {
-            "mime_type": norm_ct,
-            "data": norm_bytes,
-        },
-    ]
-)
+    response = model.generate_content(
+        [
+            user_text,
+            {
+                "mime_type": norm_ct,
+                "data": norm_bytes,
+            },
+        ]
+    )
 
-text = response.text
+    text = response.text
 
     try:
         result = _extract_json(text)
