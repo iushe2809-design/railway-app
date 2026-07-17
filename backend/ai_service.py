@@ -194,5 +194,4 @@ except Exception as e:
     # Normalize (2-tier threshold): >=80 Clean; <80 Need Attention
     score = int(result.get("score", 0))
     result["rating"] = "Clean" if score >= 80 else "Need Attention"
-
     return result
