@@ -521,15 +521,15 @@ async def _save_inspection(
                 "uploaded_at": now_iso(),
             }
         )
-try:
-    ai = await analyze_image(
+    try:
+        ai = await analyze_image(
         analysis_images[:3],
         station_name=station_name,
         calibration_examples=calibration,
     )
-except Exception as e:
-    logger.exception(f"AI analysis failed: {e}")
-    ai = {
+    except Exception as e:
+        logger.exception(f"AI analysis failed: {e}")
+        ai = {
         "rating": "Need Attention",
         "score": 50,
         "area_detected": "Unknown",
@@ -537,9 +537,8 @@ except Exception as e:
         "issues": [f"AI analysis error: {str(e)[:120]}"],
         "recommendations": ["Retry analysis later"],
     }
-
-for photo in photos:
-    photo["ai_analysis"] = ai
+    for photo in photos:
+        photo["ai_analysis"] = ai
 
     score, rating = await aggregate_inspection(photos)
 
