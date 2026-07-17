@@ -472,8 +472,11 @@ async def _save_inspection(
     files: List[UploadFile],
     inspection_date: Optional[str] = None,
 ) -> dict:
-    if not files:
-        raise HTTPException(status_code=400, detail="No files provided")
+    if len(files) != 5:
+    raise HTTPException(
+        status_code=400,
+        detail="Exactly 5 photos are required for every inspection."
+    )
     photos = []
     calibration = await _calibration_for_station(station_name)
     for f in files:
