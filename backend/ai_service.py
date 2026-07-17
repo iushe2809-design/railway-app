@@ -172,7 +172,7 @@ async def analyze_image(
 
     parts = [user_text]
 
-    for image_bytes, content_type in images:
+    for image_bytes, content_type in images[:3]:
         norm_bytes, norm_ct = normalize_image(image_bytes, content_type)
 
         parts.append(
