@@ -501,7 +501,7 @@ async def _save_inspection(
 
         # Normalize to JPEG if needed
         norm_bytes, norm_ct = normalize_image(data, content_type)
-        analysis_image.append((norm_bytes,norm_ct))
+        analysis_images.append((norm_bytes,norm_ct))
 
         ext = norm_ct.split("/")[-1].replace("jpeg", "jpg")
         slug = re.sub(r"[^a-z0-9]+", "-", station_name.lower())[:40] or "station"
