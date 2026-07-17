@@ -482,50 +482,60 @@ calibration = await _calibration_for_station(station_name)
 
 for f in files:
     content_type = (f.content_type or "").lower()
-        if content_type not in ALLOWED_MIMES and not content_type.startswith("image/"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unsupported file type: {content_type or 'unknown'}. Please upload an image.",
-            )
-        data = await f.read()
-        if len(data) > 25 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="File too large (max 25MB)")
-        # Normalize to JPEG if needed (HEIC, BMP, TIFF, GIF, very large -> JPEG)
-        norm_bytes, norm_ct = normalize_image(data, content_type)
-        ext = norm_ct.split("/")[-1].replace("jpeg", "jpg")
-        slug = re.sub(r"[^a-z0-9]+", "-", station_name.lower())[:40] or "station"
-        path = f"{APP_NAME}/stations/{slug}/{uuid.uuid4()}.{ext}"
-        result = put_object(path, norm_bytes, norm_ct)
-        # Run AI analysis with station-specific calibration
-        try:
-            ai = await analyze_image(
-                norm_bytes,
-                norm_ct,
-                station_name=station_name,
-                calibration_examples=calibration,
-            )
-        except Exception as e:
-            logger.exception(f"AI analysis failed: {e}")
-            ai = {
-                "rating": "Needs Attention",
-                "score": 50,
-                "area_detected": "Unknown",
-                "area_breakdown": [],
-                "issues": [f"AI analysis error: {str(e)[:120]}"],
-                "recommendations": ["Retry analysis later"],
-            }
-        photos.append(
-            {
-                "id": str(uuid.uuid4()),
-                "storage_path": result["path"],
-                "original_filename": f.filename,
-                "content_type": norm_ct,
-                "size": result.get("size", len(norm_bytes)),
-                "ai_analysis": ai,
-                "override": None,
-                "uploaded_at": now_iso(),
-            }
+
+    if content_type not in ALLOWED_MIMES and not content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {content_type or 'unknown'}. Please upload an image.",
         )
+
+    data = await f.read()
+
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="File too large (max 25MB)",
+        )
+
+    # Normalize to JPEG if needed
+    norm_bytes, norm_ct = normalize_image(data, content_type)
+
+    ext = norm_ct.split("/")[-1].replace("jpeg", "jpg")
+    slug = re.sub(r"[^a-z0-9]+", "-", station_name.lower())[:40] or "station"
+    path = f"{APP_NAME}/stations/{slug}/{uuid.uuid4()}.{ext}"
+
+    result = put_object(path, norm_bytes, norm_ct)
+
+    try:
+        ai = await analyze_image(
+            norm_bytes,
+            norm_ct,
+            station_name=station_name,
+            calibration_examples=calibration,
+        )
+    except Exception as e:
+        logger.exception(f"AI analysis failed: {e}")
+        ai = {
+            "rating": "Needs Attention",
+            "score": 50,
+            "area_detected": "Unknown",
+            "area_breakdown": [],
+            "issues": [f"AI analysis error: {str(e)[:120]}"],
+            "recommendations": ["Retry analysis later"],
+        }
+
+    photos.append(
+        {
+            "id": str(uuid.uuid4()),
+            "storage_path": result["path"],
+            "original_filename": f.filename,
+            "content_type": norm_ct,
+            "size": result.get("size", len(norm_bytes)),
+            "ai_analysis": ai,
+            "override": None,
+            "uploaded_at": now_iso(),
+        }
+    )
 
     score, rating = await aggregate_inspection(photos)
     today_iso_date = datetime.now(timezone.utc).date().isoformat()
