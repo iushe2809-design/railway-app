@@ -478,9 +478,10 @@ async def _save_inspection(
         detail="Exactly 5 photos are required for every inspection."
     )
     photos = []
-    calibration = await _calibration_for_station(station_name)
-    for f in files:
-        content_type = (f.content_type or "").lower()
+calibration = await _calibration_for_station(station_name)
+
+for f in files:
+    content_type = (f.content_type or "").lower()
         if content_type not in ALLOWED_MIMES and not content_type.startswith("image/"):
             raise HTTPException(
                 status_code=400,
