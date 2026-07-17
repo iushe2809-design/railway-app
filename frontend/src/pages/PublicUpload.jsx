@@ -56,8 +56,16 @@ export default function PublicUpload() {
       }
       next.push(f);
     }
-    setFiles((prev) => [...prev, ...next]);
-  }, []);
+    setFiles((prev) => {
+  const combined = [...prev, ...next];
+
+  if (combined.length > 5) {
+    toast.error("Maximum 5 photos allowed.");
+    return combined.slice(0, 5);
+  }
+
+  return combined;
+});
 
   const onDrop = (e) => {
     e.preventDefault();
@@ -66,7 +74,9 @@ export default function PublicUpload() {
   };
 
   const submit = async () => {
-    if (!files.length) return toast.error("Add at least one photo");
+    if (files.length !== 5) {
+  return toast.error("Please upload exactly 5 photos.");
+}
     setUploading(true);
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));
@@ -183,8 +193,9 @@ export default function PublicUpload() {
                 <div className="mx-auto w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center mb-3">
                   <CloudUpload className="w-5 h-5 text-blue-400" />
                 </div>
-                <div className="font-medium">Tap to browse or drop photos</div>
-                <div className="text-xs text-slate-500 mt-1">Any image format (incl. iPhone HEIC) · up to 25 MB</div>
+                <div className="text-xs text-slate-500 mt-1">
+  Upload exactly 5 photos · Any image format (including iPhone HEIC) · Up to 25 MB each
+</div>
               </div>
 
               {files.length > 0 && (
