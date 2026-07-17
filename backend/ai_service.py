@@ -132,7 +132,7 @@ def _calibration_block(examples: Optional[list]) -> str:
         "apply this judgement when borderline):\n" + "\n".join(lines) + "\n"
     )
     
-    async def analyze_image(
+async def analyze_image(
     images: list[tuple[bytes, str]],
     station_name: Optional[str] = None,
     calibration_examples: Optional[list] = None,
