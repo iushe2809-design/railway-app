@@ -191,7 +191,7 @@ except Exception as e:
             "_raw": text[:1000],
         }
 
-    # Normalize (2-tier threshold): >=80 Clean; <80 Need Attention
+    # Normalize (2-tier threshold): >=80 Clean; <80 Needs Attention
     score = int(result.get("score", 0))
-    result["rating"] = "Clean" if score >= 80 else "Need Attention"
+    result["rating"] = "Clean" if score >= 80 else "Needs Attention"
     return result
