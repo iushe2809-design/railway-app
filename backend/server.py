@@ -478,7 +478,7 @@ async def _save_inspection(
             status_code=400,
             detail="Exactly 5 photos are required for every inspection."
         )
-
+    analysis_images = []
     photos = []
     calibration = await _calibration_for_station(station_name)
 
@@ -501,30 +501,13 @@ async def _save_inspection(
 
         # Normalize to JPEG if needed
         norm_bytes, norm_ct = normalize_image(data, content_type)
+        analysis_image.append((norm_bytes,norm_ct))
 
         ext = norm_ct.split("/")[-1].replace("jpeg", "jpg")
         slug = re.sub(r"[^a-z0-9]+", "-", station_name.lower())[:40] or "station"
         path = f"{APP_NAME}/stations/{slug}/{uuid.uuid4()}.{ext}"
 
         result = put_object(path, norm_bytes, norm_ct)
-
-        try:
-            ai = await analyze_image(
-                norm_bytes,
-                norm_ct,
-                station_name=station_name,
-                calibration_examples=calibration,
-            )
-        except Exception as e:
-            logger.exception(f"AI analysis failed: {e}")
-            ai = {
-                "rating": "Needs Attention",
-                "score": 50,
-                "area_detected": "Unknown",
-                "area_breakdown": [],
-                "issues": [f"AI analysis error: {str(e)[:120]}"],
-                "recommendations": ["Retry analysis later"],
-            }
 
         photos.append(
             {
@@ -533,11 +516,30 @@ async def _save_inspection(
                 "original_filename": f.filename,
                 "content_type": norm_ct,
                 "size": result.get("size", len(norm_bytes)),
-                "ai_analysis": ai,
+                "ai_analysis": {},
                 "override": None,
                 "uploaded_at": now_iso(),
             }
         )
+try:
+    ai = await analyze_image(
+        analysis_images[:3],
+        station_name=station_name,
+        calibration_examples=calibration,
+    )
+except Exception as e:
+    logger.exception(f"AI analysis failed: {e}")
+    ai = {
+        "rating": "Need Attention",
+        "score": 50,
+        "area_detected": "Unknown",
+        "area_breakdown": [],
+        "issues": [f"AI analysis error: {str(e)[:120]}"],
+        "recommendations": ["Retry analysis later"],
+    }
+
+for photo in photos:
+    photo["ai_analysis"] = ai
 
     score, rating = await aggregate_inspection(photos)
 
