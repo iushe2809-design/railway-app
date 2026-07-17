@@ -66,6 +66,7 @@ export default function PublicUpload() {
 
   return combined;
 });
+  },[]);
 
   const onDrop = (e) => {
     e.preventDefault();
