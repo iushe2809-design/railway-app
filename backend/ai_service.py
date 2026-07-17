@@ -131,6 +131,7 @@ def _calibration_block(examples: Optional[list]) -> str:
         "\nSTATION-SPECIFIC CALIBRATION (learnt from supervisor corrections at this station — "
         "apply this judgement when borderline):\n" + "\n".join(lines) + "\n"
     )
+    
     async def analyze_image(
     images: list[tuple[bytes, str]],
     station_name: Optional[str] = None,
