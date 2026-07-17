@@ -175,7 +175,7 @@ for image_bytes, content_type in images:
 
 response = model.generate_content(parts)
 
-    text = response.text
+text = response.text
 
     try:
         result = _extract_json(text)
