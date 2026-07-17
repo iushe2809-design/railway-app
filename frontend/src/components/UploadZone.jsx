@@ -56,7 +56,7 @@ export default function UploadZone({ onUpload, uploading, testid = "upload-zone"
   };
 
   const submit = async () => {
-    if (!files.length!==5) {
+    if (files.length!==5) {
       toast.error("Please upload exactly 5 photos.");
       return;
     }
