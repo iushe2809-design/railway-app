@@ -37,7 +37,16 @@ export default function UploadZone({ onUpload, uploading, testid = "upload-zone"
       }
       next.push(f);
     }
-    setFiles((prev) => [...prev, ...next]);
+    setFiles((prev) => {
+  const combined = [...prev, ...next];
+
+  if (combined.length > 5) {
+    toast.error("Maximum 5 photos allowed.");
+    return combined.slice(0, 5);
+  }
+
+  return combined;
+});
   }, []);
 
   const onDrop = (e) => {
@@ -47,8 +56,8 @@ export default function UploadZone({ onUpload, uploading, testid = "upload-zone"
   };
 
   const submit = async () => {
-    if (!files.length) {
-      toast.error("Add at least one photo");
+    if (!files.length!==5) {
+      toast.error("Please upload exactly 5 photos.");
       return;
     }
     const ok = await onUpload(files);
@@ -88,7 +97,7 @@ export default function UploadZone({ onUpload, uploading, testid = "upload-zone"
           Drop photos here, or tap to browse
         </div>
         <div className="text-sm text-slate-400 mt-2">
-          Any photo format (incl. iPhone HEIC) &nbsp;·&nbsp; Up to 25 MB per file &nbsp;·&nbsp; Multiple at once
+          Upload exactly 5 photos · Any photo format (including iPhone HEIC) · Up to 25 MB each
         </div>
       </div>
 
@@ -135,7 +144,7 @@ export default function UploadZone({ onUpload, uploading, testid = "upload-zone"
               </Button>
               <Button
                 onClick={submit}
-                disabled={uploading}
+                disabled={uploading||files.length!==5}
                 className="bg-blue-500 hover:bg-blue-400 text-white"
                 data-testid="upload-submit-btn"
               >
