@@ -88,7 +88,7 @@ def normalize_image(image_bytes: bytes, content_type: str) -> tuple[bytes, str]:
         if img.mode not in ("RGB", "L"):
             img = img.convert("RGB")
         # Down-size very large images
-        max_side =1024
+        max_side =768
         if max(img.size) > max_side:
             img.thumbnail((max_side, max_side))
         buf = io.BytesIO()
