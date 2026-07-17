@@ -134,8 +134,7 @@ def _calibration_block(examples: Optional[list]) -> str:
 
 
 async def analyze_image(
-    image_bytes: bytes,
-    content_type: str = "image/jpeg",
+    images:list[tuple[bytes,str]],
     station_name: Optional[str] = None,
     calibration_examples: Optional[list] = None,
 ) -> dict:
@@ -144,7 +143,7 @@ async def analyze_image(
         raise RuntimeError("GEMINI_API_KEY not configured")
     genai.configure(api_key=_gemini_key())
 
-    norm_bytes, norm_ct = normalize_image(image_bytes, content_type)
+    
     
 
     calibration = _calibration_block(calibration_examples)
@@ -162,15 +161,19 @@ async def analyze_image(
         system_instruction=SYSTEM_PROMPT,
     )
 
-    response = model.generate_content(
-        [
-            user_text,
-            {
-                "mime_type": norm_ct,
-                "data": norm_bytes,
-            },
-        ]
+    parts = [user_text]
+
+for image_bytes, content_type in images:
+    norm_bytes, norm_ct = normalize_image(image_bytes, content_type)
+
+    parts.append(
+        {
+            "mime_type": norm_ct,
+            "data": norm_bytes,
+        }
     )
+
+response = model.generate_content(parts)
 
     text = response.text
 
