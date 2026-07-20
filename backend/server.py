@@ -523,19 +523,19 @@ async def _save_inspection(
         )
     try:
         ai = await analyze_image(
-        analysis_images[:3],
-        station_name=station_name,
-        calibration_examples=calibration,
+            analysis_images[:3],
+            station_name=station_name,
+            calibration_examples=calibration,
     )
     except Exception as e:
         logger.exception(f"AI analysis failed: {e}")
         ai = {
-        "rating": "Need Attention",
-        "score": 50,
-        "area_detected": "Unknown",
-        "area_breakdown": [],
-        "issues": [f"AI analysis error: {str(e)[:120]}"],
-        "recommendations": ["Retry analysis later"],
+            "rating": "Need Attention",
+            "score": 50,
+            "area_detected": "Unknown",
+            "area_breakdown": [],
+            "issues": [f"AI analysis error: {str(e)[:120]}"],
+            "recommendations": ["Retry analysis later"],
     }
     for photo in photos:
         photo["ai_analysis"] = ai
