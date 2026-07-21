@@ -179,6 +179,10 @@ async def login(req: LoginRequest):
             logger.info(f"Auto-created SM account: {username}")
 
     user = await db.users.find_one({"username": username}, {"_id": 0})
+    logger.info(f"Username: {username}")
+    logger.info(f"Entered password: {password}")
+    logger.info(f"Password hash: {user['password_hash']}")
+    logger.info(f"Password match: {verify_password(password, user['password_hash'])}")
     if not user or not user.get("active", True):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
