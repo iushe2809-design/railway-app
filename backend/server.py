@@ -668,9 +668,6 @@ async def public_upload(
 # ============ Inspection list / detail / override ============
 
 
-# ============ Inspection list / detail / override ============
-
-
 @api_router.get("/inspections/station-names")
 async def list_station_names(user: Annotated[dict, Depends(require_user)]):
     """Distinct station names taken from actual SM submissions (admin filter use)."""
