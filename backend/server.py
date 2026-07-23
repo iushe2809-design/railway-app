@@ -579,6 +579,22 @@ async def upload_inspection(
     # SMs always upload for THEIR assigned station. First-time upload from an
     # auto-provisioned SM (station_name is empty) locks in the value they submit.
     if user["role"] == "sm":
+            # Restrict Station Masters to one inspection per day
+        today = datetime.now(timezone.utc).date().isoformat()
+
+        existing_upload = await db.inspections.find_one(
+            {
+                "uploaded_by_id": user["id"],
+                "inspection_date": today,
+                "is_deleted": False,
+            }
+        )
+
+        if existing_upload:
+            raise HTTPException(
+                status_code=409,
+                detail="Today's inspection has already been submitted. Only one upload is allowed per day.",
+            )
         assigned = user.get("station_name")
         if not assigned:
             if not station_name or not station_name.strip():
@@ -628,6 +644,28 @@ async def public_upload(
         files=files,
         inspection_date=inspection_date,
     )
+    @api_router.get("/inspections/today-status")
+    async def today_status(
+        user: Annotated[dict, Depends(require_user)],
+):
+    if user["role"] != "sm":
+        return {"submitted": False}
+
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    inspection = await db.inspections.find_one(
+        {
+            "uploaded_by_id": user["id"],
+            "inspection_date": today,
+            "is_deleted": False,
+        }
+    )
+
+    return {
+        "submitted": inspection is not None
+    }
+
+# ============ Inspection list / detail / override ============
 
 
 # ============ Inspection list / detail / override ============
