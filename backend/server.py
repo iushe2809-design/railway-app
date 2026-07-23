@@ -646,20 +646,20 @@ async def public_upload(
     )
     
     @api_router.get("/inspections/today-status")
-async def today_status(
-    user: Annotated[dict, Depends(require_user)],
-):
-    if user["role"] != "sm":
-        return {"submitted": False}
+    async def today_status(
+        user: Annotated[dict, Depends(require_user)],
+    ):
+        if user["role"] != "sm":
+            return {"submitted": False}
 
-    today = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
 
-    inspection = await db.inspections.find_one(
-        {
-            "uploaded_by_id": user["id"],
-            "inspection_date": today,
-            "is_deleted": False,
-        }
+        inspection = await db.inspections.find_one(
+            {
+                "uploaded_by_id": user["id"],
+                "inspection_date": today,
+                "is_deleted": False,
+            }
     )
 
     return {
