@@ -644,9 +644,10 @@ async def public_upload(
         files=files,
         inspection_date=inspection_date,
     )
+    
     @api_router.get("/inspections/today-status")
-    async def today_status(
-        user: Annotated[dict, Depends(require_user)],
+async def today_status(
+    user: Annotated[dict, Depends(require_user)],
 ):
     if user["role"] != "sm":
         return {"submitted": False}
