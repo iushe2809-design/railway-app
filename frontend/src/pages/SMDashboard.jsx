@@ -20,16 +20,20 @@ export default function SMDashboard() {
   const [grievanceText, setGrievanceText] = useState("");
   const [submittingGrievance, setSubmittingGrievance] = useState(false);
   const [myGrievances, setMyGrievances] = useState([]);
+  const [todaySubmitted, setTodaySubmitted] = useState(false);
 
   const assignedStation = user?.station_name || "";
   const needsStationSetup = !assignedStation;
 
   const loadRecent = async () => {
     try {
-      const [ins, gr] = await Promise.all([
-        api.get("/inspections?limit=20"),
-        api.get("/grievances"),
-      ]);
+      const [ins, gr, status] = await Promise.all([
+          api.get("/inspections?limit=20"),
+          api.get("/grievances"),
+          api.get("/inspections/today-status"),
+    ]);
+
+    setTodaySubmitted(status.data.submitted);
       setRecent(ins.data);
       setMyGrievances(gr.data);
     } catch (e) {
@@ -49,6 +53,10 @@ export default function SMDashboard() {
       stationToUse = manualStation.trim();
     }
     if (!inspectionDate) { toast.error("Please select the inspection date"); return false; }
+    if (todaySubmitted) {
+      toast.error("Today's inspection has already been submitted.");
+      return false;
+    }
     setUploading(true);
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));
@@ -67,7 +75,7 @@ export default function SMDashboard() {
         } catch (_) { /* noop */ }
         setTimeout(() => window.location.reload(), 800);
       }
-      loadRecent();
+      await loadRecent();
       return true;
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Upload failed");
@@ -148,7 +156,23 @@ export default function SMDashboard() {
         </div>
       </div>
 
-      <UploadZone onUpload={onUpload} uploading={uploading} testid="sm-upload-zone" />
+      {todaySubmitted ? (
+          <div className="surface rounded-xl p-6 text-center border border-emerald-500/30">
+             <div className="text-lg font-semibold text-emerald-400">
+               Today's inspection has already been submitted.
+        </div>
+
+        <div className="text-slate-400 mt-2">
+              You can still submit grievances below.
+        </div>
+     </div>
+) : (
+  <UploadZone
+    onUpload={onUpload}
+    uploading={uploading}
+    testid="sm-upload-zone"
+  />
+)}
 
       {/* Grievance form */}
       <div className="surface rounded-xl p-5 md:p-6" data-testid="sm-grievance-section">
