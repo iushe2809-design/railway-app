@@ -33,7 +33,7 @@ def put_object(path: str, data: bytes, content_type: str) -> dict:
         public_id=path,
         resource_type="image",
         overwrite=True,
-        folder="railway-cleanliness",
+        
     )
 
     return {
