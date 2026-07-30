@@ -53,7 +53,7 @@ export default function AdminDashboard() {
     if (from) params.set("date_from", from);
     if (to) params.set("date_to", to);
     const insParams = new URLSearchParams(params);
-    insParams.set("limit", "20");
+    insParams.set("limit", "100");
     const isSingleToday = from === to;
     const requests = [
       api.get(`/reports/summary?${params.toString()}`),
