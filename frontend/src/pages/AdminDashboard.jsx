@@ -105,7 +105,7 @@ export default function AdminDashboard() {
         {/* Best / Worst callouts */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <CalloutCard tone="green" icon={Award} label="Best Clean Station" station={best} testid="callout-best" />
-          <CalloutCard tone="red" icon={ShieldAlert} label="Worst Clean Station" station={worst} testid="callout-worst" />
+          <CalloutCard tone="red" icon={ShieldAlert} label="Needs Attention" station={worst} testid="callout-worst" />
         </div>
 
         {/* Date filter */}
