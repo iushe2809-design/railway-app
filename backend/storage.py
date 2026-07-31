@@ -36,6 +36,7 @@ def put_object(path: str, data: bytes, content_type: str) -> dict:
         unique_filename=False,
         
     )
+    logger.info(upload)
 
     return {
         "path": upload["public_id"],
