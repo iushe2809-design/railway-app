@@ -51,7 +51,7 @@ def get_object(path: str) -> Tuple[bytes, str]:
 
     url = cloudinary.CloudinaryImage(path).build_url(
         secure=True,
-        resource_type"image",
+        resource_type="image",
     )
 
     response = requests.get(url, timeout=60)
