@@ -1160,10 +1160,11 @@ async def get_file(
             is_authed = True
     if not is_authed:
         raise HTTPException(status_code=401, detail="Not authenticated")
+        logger.info(f"Requested path:{path}")
     try:
         data, content_type = get_object(path)
     except Exception as e:
-        print("FILE ERROR:",e)
+        logger.exception(f"FILE ERROR for path:{path}")
         raise HTTPException(status_code=404, detail=str(e))
     return Response(content=data, media_type=content_type)
 
