@@ -1,6 +1,7 @@
 import os
 import logging
 from typing import Tuple
+import cloudinary.api
 
 import cloudinary
 import cloudinary.uploader
@@ -50,11 +51,10 @@ def get_object(path: str) -> Tuple[bytes, str]:
     Download image from Cloudinary.
     """
 
-    url = cloudinary.CloudinaryImage(path).build_url(
-        secure=True,
-        resource_type="image",
-    )
-    logger.info(f"Cloudinary URL:{url}")
+    result = cloudinary.api.resource(path, resource_type="image")
+
+    url = result["secure_url"]
+    logger.info(f"Cloudinary URL: {url}")
 
     response = requests.get(url, timeout=60)
     response.raise_for_status()
