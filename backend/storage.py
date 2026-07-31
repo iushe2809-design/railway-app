@@ -53,6 +53,7 @@ def get_object(path: str) -> Tuple[bytes, str]:
         secure=True,
         resource_type="image",
     )
+    logger.info(f"Cloudinary URL:{url}")
 
     response = requests.get(url, timeout=60)
     response.raise_for_status()
