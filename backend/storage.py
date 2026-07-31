@@ -33,6 +33,7 @@ def put_object(path: str, data: bytes, content_type: str) -> dict:
         public_id=path,
         resource_type="image",
         overwrite=True,
+        unique_filename=False,
         
     )
 
@@ -48,7 +49,10 @@ def get_object(path: str) -> Tuple[bytes, str]:
     Download image from Cloudinary.
     """
 
-    url = cloudinary.CloudinaryImage(path).build_url()
+    url = cloudinary.CloudinaryImage(path).build_url(
+        secure=True,
+        resource_type"image",
+    )
 
     response = requests.get(url, timeout=60)
     response.raise_for_status()
