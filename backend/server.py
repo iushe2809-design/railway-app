@@ -319,13 +319,12 @@ async def send_otp(
 
     headers = {
         "Content-Type": "application/json",
-        "authkey": os.environ["MSG91_AUTH_KEY"],
     }
 
     body = {
         "widgetId": os.environ["MSG91_WIDGET_ID"],
         "tokenAuth": os.environ["MSG91_TOKEN_AUTH"],
-        "identifier": "91" + mobile,
+        "identifier": mobile,
     }
 
     async with httpx.AsyncClient() as client:
@@ -352,13 +351,12 @@ async def verify_otp(
 
     headers = {
         "Content-Type": "application/json",
-        "authkey": os.environ["MSG91_AUTH_KEY"],
     }
 
     body = {
         "widgetId": os.environ["MSG91_WIDGET_ID"],
         "tokenAuth": os.environ["MSG91_TOKEN_AUTH"],
-        "identifier": "91" + payload.mobile,
+        "identifier": payload.mobile,
         "otp": payload.otp,
     }
 
