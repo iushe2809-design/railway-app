@@ -34,6 +34,9 @@ export default function Login() {
       });
       setLoginResponse(res.data);
 
+      setSession(res.data.token, res.data.user);
+
+
       if (!res.data.mobile_registered) {
         setShowMobile(true);
         return;
@@ -45,8 +48,7 @@ export default function Login() {
         return;
 }
 
-    setSession(res.data.token, res.data.user);
-
+    
     toast.success(`Welcome, ${res.data.user.full_name}`);
 
     const dest =
