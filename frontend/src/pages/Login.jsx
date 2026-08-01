@@ -14,6 +14,13 @@ export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showMobile, setShowMobile] = useState(false);
+  const [showOTP, setShowOTP] = useState(false);
+
+  const [mobile, setMobile] = useState("");
+  const [otp, setOtp] = useState("");
+
+  const [loginResponse, setLoginResponse] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -25,12 +32,30 @@ export default function Login() {
         username: username.trim(),
         password,
       });
-      setSession(res.data.token, res.data.user);
-      toast.success(`Welcome, ${res.data.user.full_name}`);
-      const dest =
+      setLoginResponse(res.data);
+
+      if (!res.data.mobile_registered) {
+        setShowMobile(true);
+        return;
+    }
+
+    if (!res.data.mobile_verified) {
+        setMobile(res.data.user.mobile || "");
+        setShowOTP(true);
+        return;
+}
+
+    setSession(res.data.token, res.data.user);
+
+    toast.success(`Welcome, ${res.data.user.full_name}`);
+
+    const dest =
         location.state?.from?.pathname ||
-        (res.data.user.role === "admin" || res.data.user.role === "viewer" ? "/admin" : "/upload");
-      navigate(dest, { replace: true });
+        (res.data.user.role === "admin" || res.data.user.role === "viewer"
+            ? "/admin"
+            : "/upload");
+
+    navigate(dest, { replace: true });
     } catch (err) {
       const msg = err?.response?.data?.detail || "Login failed";
       toast.error(msg);
@@ -38,6 +63,43 @@ export default function Login() {
       setLoading(false);
     }
   };
+
+  const registerMobile = async () => {
+  try {
+    await api.post("/auth/send-otp", {
+      mobile,
+    });
+
+    toast.success("OTP sent successfully");
+    setShowMobile(false);
+    setShowOTP(true);
+  } catch (err) {
+    toast.error(err?.response?.data?.detail || "Failed to send OTP");
+  }
+};
+
+const verifyOTP = async () => {
+  try {
+    await api.post("/auth/verify-otp", {
+      mobile,
+      otp,
+    });
+
+    setSession(loginResponse.token, loginResponse.user);
+
+    toast.success("Mobile verified successfully");
+
+    const dest =
+      loginResponse.user.role === "admin" ||
+      loginResponse.user.role === "viewer"
+        ? "/admin"
+        : "/upload";
+
+    navigate(dest, { replace: true });
+  } catch (err) {
+    toast.error(err?.response?.data?.detail || "Invalid OTP");
+  }
+};
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-[#060B14]">
@@ -104,7 +166,46 @@ export default function Login() {
             Use your assigned ID. Station Masters & supervisors only.
           </p>
 
+          {showMobile ? (
+  <>
+    <Label>Mobile Number</Label>
+
+    <Input
+      value={mobile}
+      onChange={(e) => setMobile(e.target.value)}
+      placeholder="Enter 10 digit mobile number"
+      className="mt-2"
+    />
+
+    <Button
+      onClick={registerMobile}
+      className="w-full mt-4"
+    >
+      Send OTP
+    </Button>
+  </>
+) : showOTP ? (
+  <>
+    <Label>OTP</Label>
+
+    <Input
+      value={otp}
+      onChange={(e) => setOtp(e.target.value)}
+      placeholder="Enter OTP"
+      className="mt-2"
+    />
+
+    <Button
+      onClick={verifyOTP}
+      className="w-full mt-4"
+    >
+      Verify OTP
+    </Button>
+  </>
+) : (
+
           <form onSubmit={submit} className="mt-8 space-y-5" data-testid="login-form">
+            )}
             <div>
               <Label htmlFor="username" className="text-slate-300">
                 User ID
