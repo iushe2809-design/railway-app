@@ -205,7 +205,6 @@ const verifyOTP = async () => {
 ) : (
 
           <form onSubmit={submit} className="mt-8 space-y-5" data-testid="login-form">
-            )}
             <div>
               <Label htmlFor="username" className="text-slate-300">
                 User ID
@@ -246,6 +245,7 @@ const verifyOTP = async () => {
               {loading ? "Signing in…" : "Sign in"}
             </Button>
           </form>
+      )}
         </div>
       </div>
     </div>
