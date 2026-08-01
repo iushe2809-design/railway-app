@@ -1,6 +1,7 @@
 """Main FastAPI server for Railway Station Cleanliness AI Inspector."""
 import asyncio
 import logging
+import httpx
 import os
 import re
 import secrets
@@ -111,6 +112,17 @@ class OverrideRequest(BaseModel):
 class ShareLinkCreate(BaseModel):
     station_name: str
 
+class RegisterMobileRequest(BaseModel):
+    mobile: str
+
+class SendOTPRequest(BaseModel):
+    mobile: str
+
+
+class VerifyOTPRequest(BaseModel):
+    mobile: str
+    otp: str
+
 
 # ============ Helpers ============
 
@@ -198,13 +210,24 @@ async def login(req: LoginRequest):
     if is_named and password == "Station@123":
         token = create_token(user["id"], "sm", mode="sm")
         acting = {**user, "role": "sm", "station_name": None}
-        return {"token": token, "user": public_user(acting)}
+        return {
+        "token": token,
+        "user": public_user(acting),
+        "mobile_registered": bool(user.get("mobile")),
+        "mobile_verified": bool(user.get("mobile_verified")),
+}
 
     if not verify_password(password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_token(user["id"], user["role"])
-    return {"token": token, "user": public_user(user)}
+
+    return {
+        "token": token,
+        "user": public_user(user),
+        "mobile_registered": bool(user.get("mobile")),
+        "mobile_verified": bool(user.get("mobile_verified")),
+}
 
 
 @api_router.get("/auth/me")
@@ -238,6 +261,131 @@ async def change_credentials(
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     token = create_token(fresh["id"], fresh["role"])
     return {"ok": True, "changed": True, "token": token, "user": public_user(fresh)}
+
+@api_router.post("/auth/register-mobile")
+async def register_mobile(
+        payload: RegisterMobileRequest,
+        user: Annotated[dict, Depends(require_user)],
+):
+        mobile = payload.mobile.strip()
+
+        if len(mobile) != 10 or not mobile.isdigit():
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid mobile number",
+        )
+
+        await db.users.update_one(
+            {"id": user["id"]},
+            {
+                "$set": {
+                    "mobile": mobile,
+                    "mobile_verified": False,
+            }
+        },
+    )
+
+        return {
+            "success": True,
+            "message":"Mobile number saved."
+        }
+
+@api_router.post("/auth/send-otp")
+async def send_otp(
+    payload: SendOTPRequest,
+    user: Annotated[dict, Depends(require_user)],
+):
+    mobile = payload.mobile.strip()
+
+    if len(mobile) != 10 or not mobile.isdigit():
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid mobile number",
+        )
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {
+                "mobile": mobile,
+                "mobile_verified": False,
+            }
+        },
+    )
+
+    url = "https://control.msg91.com/api/v5/widget/sendOtp"
+
+    headers = {
+        "Content-Type": "application/json",
+        "authkey": os.environ["MSG91_AUTH_KEY"],
+    }
+
+    body = {
+        "widgetId": os.environ["MSG91_WIDGET_ID"],
+        "tokenAuth": os.environ["MSG91_TOKEN_AUTH"],
+        "identifier": "91" + mobile,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            url,
+            json=body,
+            headers=headers,
+        )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=500,
+            detail=response.text,
+        )
+
+    return response.json()
+
+@api_router.post("/auth/verify-otp")
+async def verify_otp(
+    payload: VerifyOTPRequest,
+    user: Annotated[dict, Depends(require_user)],
+):
+    url = "https://control.msg91.com/api/v5/widget/verifyOtp"
+
+    headers = {
+        "Content-Type": "application/json",
+        "authkey": os.environ["MSG91_AUTH_KEY"],
+    }
+
+    body = {
+        "widgetId": os.environ["MSG91_WIDGET_ID"],
+        "tokenAuth": os.environ["MSG91_TOKEN_AUTH"],
+        "identifier": "91" + payload.mobile,
+        "otp": payload.otp,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            url,
+            json=body,
+            headers=headers,
+        )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=500,
+            detail=response.text,
+        )
+
+    data = response.json()
+
+    if data.get("type") == "success":
+        await db.users.update_one(
+            {"id": user["id"]},
+            {
+                "$set": {
+                    "mobile_verified": True,
+                }
+            },
+        )
+
+    return data
 
 
 # ============ Station Endpoints ============
