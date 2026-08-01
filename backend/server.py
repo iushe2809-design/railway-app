@@ -334,6 +334,15 @@ async def send_otp(
             headers=headers,
         )
 
+    logger.info(f"MSG91 Status: {response.status_code}")
+    logger.info(f"MSG91 Response: {response.text}")
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=response.text,
+    )
+
     if response.status_code >= 400:
         raise HTTPException(
             status_code=500,
