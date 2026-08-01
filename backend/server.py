@@ -140,6 +140,8 @@ def public_user(user: dict) -> dict:
         "station_id": user.get("station_id"),
         "station_name": user.get("station_name"),
         "active": user.get("active", True),
+        "mobile": user.get("mobile"),
+        "mobile_verified": user.get("mobile_verified", False),
     }
 
 
