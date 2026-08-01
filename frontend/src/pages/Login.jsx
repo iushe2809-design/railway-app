@@ -34,8 +34,6 @@ export default function Login() {
       });
       setLoginResponse(res.data);
 
-      setSession(res.data.token, res.data.user);
-
       if (!res.data.mobile_registered) {
         setShowMobile(true);
         return;
