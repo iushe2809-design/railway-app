@@ -1,0 +1,13 @@
+{
+  "id": "/",
+  "name": "My Clean Station",
+  "short_name": "Clean Station",
+  "description": "AI-powered railway station cleanliness inspection for Indian Railways.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0b1220",
+  "background_color": "#0b1220",
+  "icons": []
+}
